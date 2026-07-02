@@ -517,7 +517,7 @@ export class XaiResponsesLanguageModel implements LanguageModelV4 {
     let usage: LanguageModelV4Usage | undefined = undefined;
     let costInUsdTicks: number | undefined = undefined;
     let isFirstChunk = true;
-    const contentBlocks: Record<string, { type: 'text' }> = {};
+    const contentBlocks: Record<string, { type: 'text'; text: string }> = {};
     const seenToolCalls = new Set<string>();
 
     // Track ongoing function calls by output_index so we can stream
@@ -644,9 +644,11 @@ export class XaiResponsesLanguageModel implements LanguageModelV4 {
 
             if (event.type === 'response.output_text.delta') {
               const blockId = `text-${event.item_id}`;
+              let block = contentBlocks[blockId];
 
-              if (contentBlocks[blockId] == null) {
-                contentBlocks[blockId] = { type: 'text' };
+              if (block == null) {
+                block = { type: 'text', text: '' };
+                contentBlocks[blockId] = block;
                 controller.enqueue({
                   type: 'text-start',
                   id: blockId,
@@ -658,6 +660,7 @@ export class XaiResponsesLanguageModel implements LanguageModelV4 {
                 id: blockId,
                 delta: event.delta,
               });
+              block.text += event.delta;
 
               return;
             }
@@ -963,20 +966,28 @@ export class XaiResponsesLanguageModel implements LanguageModelV4 {
                 for (const contentPart of part.content) {
                   if (contentPart.text && contentPart.text.length > 0) {
                     const blockId = `text-${part.id}`;
+                    let block = contentBlocks[blockId];
 
-                    // Only emit text if we haven't already streamed it via output_text.delta events
-                    if (contentBlocks[blockId] == null) {
-                      contentBlocks[blockId] = { type: 'text' };
+                    if (block == null) {
+                      block = { type: 'text', text: '' };
+                      contentBlocks[blockId] = block;
                       controller.enqueue({
                         type: 'text-start',
                         id: blockId,
                       });
+                    }
 
+                    const delta = contentPart.text.startsWith(block.text)
+                      ? contentPart.text.slice(block.text.length)
+                      : contentPart.text;
+
+                    if (delta.length > 0) {
                       controller.enqueue({
                         type: 'text-delta',
                         id: blockId,
-                        delta: contentPart.text,
+                        delta,
                       });
+                      block.text += delta;
                     }
                   }
 
