@@ -86,8 +86,9 @@ describe('Chat', () => {
 
   describe('overlapping resume streams', () => {
     it('should not log a TypeError when one resume clears activeResponse before the other finishes', async () => {
-      const controllers: Array<ReadableStreamDefaultController<UIMessageChunk>> =
-        [];
+      const controllers: Array<
+        ReadableStreamDefaultController<UIMessageChunk>
+      > = [];
 
       const transport: ChatTransport<UIMessage> = {
         async sendMessages() {
@@ -105,12 +106,13 @@ describe('Chat', () => {
       const consoleErrorSpy = vi
         .spyOn(console, 'error')
         .mockImplementation(() => {});
+      const onFinish = vi.fn();
 
       const chat = new TestChat({
         id: '123',
         generateId: mockId(),
         transport,
-        onFinish: () => {},
+        onFinish,
       });
 
       const firstResume = chat.resumeStream();
@@ -127,6 +129,10 @@ describe('Chat', () => {
       await firstResume;
 
       expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.any(TypeError));
+      expect(onFinish.mock.calls.map(([event]) => event.message.id)).toEqual([
+        'id-1',
+        'id-0',
+      ]);
     });
   });
 
