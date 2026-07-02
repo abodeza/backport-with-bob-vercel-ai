@@ -11,6 +11,7 @@ import {
 } from '../ui-message-stream/ui-message-chunks';
 import { createIdMap } from '../util/create-id-map';
 import type { ErrorHandler } from '../util/error-handler';
+import { appendToLazyText, withLazyText } from '../util/lazy-text';
 import { mergeObjects } from '../util/merge-objects';
 import { parsePartialJson } from '../util/parse-partial-json';
 import type { UIDataTypesToSchemas } from './chat';
@@ -385,12 +386,11 @@ export function processUIMessageStream<UI_MESSAGE extends UIMessage>({
 
           switch (chunk.type) {
             case 'text-start': {
-              const textPart: TextUIPart = {
+              const textPart: TextUIPart = withLazyText({
                 type: 'text',
-                text: '',
                 providerMetadata: chunk.providerMetadata,
                 state: 'streaming',
-              };
+              });
               state.activeTextParts[chunk.id] = textPart;
               state.message.parts.push(textPart);
               write();
@@ -408,7 +408,7 @@ export function processUIMessageStream<UI_MESSAGE extends UIMessage>({
                     `Ensure a "text-start" chunk is sent before any "text-delta" chunks.`,
                 });
               }
-              textPart.text += chunk.delta;
+              appendToLazyText(textPart, chunk.delta);
               textPart.providerMetadata =
                 chunk.providerMetadata ?? textPart.providerMetadata;
               write();
@@ -446,12 +446,11 @@ export function processUIMessageStream<UI_MESSAGE extends UIMessage>({
             }
 
             case 'reasoning-start': {
-              const reasoningPart: ReasoningUIPart = {
+              const reasoningPart: ReasoningUIPart = withLazyText({
                 type: 'reasoning',
-                text: '',
                 providerMetadata: chunk.providerMetadata,
                 state: 'streaming',
-              };
+              });
               state.activeReasoningParts[chunk.id] = reasoningPart;
               state.message.parts.push(reasoningPart);
               write();
@@ -469,7 +468,7 @@ export function processUIMessageStream<UI_MESSAGE extends UIMessage>({
                     `Ensure a "reasoning-start" chunk is sent before any "reasoning-delta" chunks.`,
                 });
               }
-              reasoningPart.text += chunk.delta;
+              appendToLazyText(reasoningPart, chunk.delta);
               reasoningPart.providerMetadata =
                 chunk.providerMetadata ?? reasoningPart.providerMetadata;
               write();

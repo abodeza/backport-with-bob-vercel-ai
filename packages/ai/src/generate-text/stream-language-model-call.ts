@@ -36,6 +36,7 @@ import {
   type AsyncIterableStream,
 } from '../util/async-iterable-stream';
 import type { DownloadFunction } from '../util/download/download-function';
+import { appendToLazyText, withLazyText } from '../util/lazy-text';
 import { notify } from '../util/notify';
 import { now as originalNow } from '../util/now';
 import { calculateTokensPerSecond } from './calculate-tokens-per-second';
@@ -819,11 +820,12 @@ function upsertTextContentPart<TOOLS extends ToolSet>({
 
   if (partIndex == null) {
     partIndex =
-      content.push({
-        type,
-        text: '',
-        ...(providerMetadata != null ? { providerMetadata } : {}),
-      }) - 1;
+      content.push(
+        withLazyText({
+          type,
+          ...(providerMetadata != null ? { providerMetadata } : {}),
+        }),
+      ) - 1;
     partIndexes.set(id, partIndex);
   }
 
@@ -833,7 +835,7 @@ function upsertTextContentPart<TOOLS extends ToolSet>({
   };
 
   if (textDelta != null) {
-    part.text += textDelta;
+    appendToLazyText(part, textDelta);
   }
 
   if (providerMetadata != null) {

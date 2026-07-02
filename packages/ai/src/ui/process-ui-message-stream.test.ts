@@ -52,6 +52,80 @@ describe('processUIMessageStream', () => {
     });
   };
 
+  it('should append text deltas without reading or writing the current text', async () => {
+    state = createStreamingUIMessageState({
+      messageId: 'msg-123',
+      lastMessage: undefined,
+    });
+
+    let textReads = 0;
+    let textWrites = 0;
+    let wrappedText = false;
+
+    await consumeStream({
+      stream: processUIMessageStream({
+        stream: createUIMessageStream([
+          { type: 'text-start', id: 'text-1' },
+          { type: 'text-delta', id: 'text-1', delta: 'Hello, ' },
+          { type: 'text-delta', id: 'text-1', delta: 'world!' },
+          { type: 'text-end', id: 'text-1' },
+        ]),
+        runUpdateMessageJob: async job => {
+          await job({
+            state: state!,
+            write: () => {
+              const textPart = state!.message.parts.find(
+                part => part.type === 'text',
+              );
+
+              if (textPart == null || wrappedText) {
+                return;
+              }
+
+              const descriptor = Object.getOwnPropertyDescriptor(
+                textPart,
+                'text',
+              )!;
+              let text =
+                descriptor.value == null ? undefined : String(descriptor.value);
+
+              Object.defineProperty(textPart, 'text', {
+                enumerable: true,
+                configurable: true,
+                get() {
+                  textReads++;
+                  return descriptor.get == null
+                    ? text
+                    : descriptor.get.call(textPart);
+                },
+                set(value: string) {
+                  textWrites++;
+                  if (descriptor.set == null) {
+                    text = value;
+                  } else {
+                    descriptor.set.call(textPart, value);
+                  }
+                },
+              });
+
+              wrappedText = true;
+            },
+          });
+        },
+        onError: error => {
+          throw error;
+        },
+      }),
+    });
+
+    expect(textReads).toBe(0);
+    expect(textWrites).toBe(0);
+    expect(state.message.parts[0]).toMatchObject({
+      type: 'text',
+      text: 'Hello, world!',
+    });
+  });
+
   describe('text', () => {
     beforeEach(async () => {
       const stream = createUIMessageStream([

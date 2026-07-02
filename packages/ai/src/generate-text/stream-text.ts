@@ -74,6 +74,7 @@ import { consumeStream } from '../util/consume-stream';
 import { createIdMap } from '../util/create-id-map';
 import { createStitchableStream } from '../util/create-stitchable-stream';
 import type { DownloadFunction } from '../util/download/download-function';
+import { appendToLazyText, withLazyText } from '../util/lazy-text';
 import { mergeAbortSignals } from '../util/merge-abort-signals';
 import { mergeObjects } from '../util/merge-objects';
 import { notify } from '../util/notify';
@@ -1148,11 +1149,10 @@ class DefaultStreamTextResult<
         }
 
         if (part.type === 'text-start') {
-          activeTextContent[part.id] = {
+          activeTextContent[part.id] = withLazyText({
             type: 'text',
-            text: '',
             providerMetadata: part.providerMetadata,
-          };
+          });
 
           recordedContent.push(activeTextContent[part.id]);
         }
@@ -1171,7 +1171,7 @@ class DefaultStreamTextResult<
             return;
           }
 
-          activeText.text += part.text;
+          appendToLazyText(activeText, part.text);
           activeText.providerMetadata =
             part.providerMetadata ?? activeText.providerMetadata;
         }
@@ -1197,11 +1197,10 @@ class DefaultStreamTextResult<
         }
 
         if (part.type === 'reasoning-start') {
-          activeReasoningContent[part.id] = {
+          activeReasoningContent[part.id] = withLazyText({
             type: 'reasoning',
-            text: '',
             providerMetadata: part.providerMetadata,
-          };
+          });
 
           recordedContent.push(activeReasoningContent[part.id]);
         }
@@ -1220,7 +1219,7 @@ class DefaultStreamTextResult<
             return;
           }
 
-          activeReasoning.text += part.text;
+          appendToLazyText(activeReasoning, part.text);
           activeReasoning.providerMetadata =
             part.providerMetadata ?? activeReasoning.providerMetadata;
         }

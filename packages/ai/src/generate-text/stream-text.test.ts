@@ -5620,6 +5620,35 @@ describe('streamText', () => {
     });
   });
 
+  describe('result.content', () => {
+    it('should expose streamed text content through a lazy text getter', async () => {
+      const result = streamText({
+        model: createTestModel({
+          stream: convertArrayToReadableStream([
+            { type: 'text-start', id: '1' },
+            { type: 'text-delta', id: '1', delta: 'Hello, ' },
+            { type: 'text-delta', id: '1', delta: 'world!' },
+            { type: 'text-end', id: '1' },
+            {
+              type: 'finish',
+              finishReason: { unified: 'stop', raw: 'stop' },
+              usage: testUsage,
+            },
+          ]),
+        }),
+        prompt: 'test-input',
+      });
+
+      const content = await result.content;
+      const textPart = content.find(part => part.type === 'text')!;
+
+      expect(textPart.text).toBe('Hello, world!');
+      expect(Object.getOwnPropertyDescriptor(textPart, 'text')?.get).toEqual(
+        expect.any(Function),
+      );
+    });
+  });
+
   describe('result.providerMetadata', () => {
     it('should resolve with provider metadata', async () => {
       const result = streamText({
