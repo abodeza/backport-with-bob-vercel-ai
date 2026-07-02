@@ -18,7 +18,7 @@ import {
 import type { HarnessV1BuiltinToolName } from '@ai-sdk/harness';
 import type { StartMessage } from '../codex-bridge-protocol';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 // Temporary workaround for upstream codex MCP-tool bug — see ./cli-relay.ts
 import {
@@ -32,6 +32,10 @@ import {
   isToolRelayRequestFromAllowedProcess,
   type ToolRelayCall,
 } from './tool-relay-auth';
+import {
+  buildHarnessToolsMcpServerConfig,
+  writeToolSchemasFile,
+} from './tool-schemas';
 import { argv, env as procEnv, stdout } from 'node:process';
 
 /*
@@ -133,6 +137,7 @@ async function runTurn(start: StartMessage, turn: BridgeTurn): Promise<void> {
   const mcpServers: Record<string, unknown> = {};
   let relay: ToolRelay | undefined;
   let cliShimPath: string | undefined;
+  let toolSchemasPath: string | undefined;
   if (start.tools && start.tools.length > 0) {
     cliShimPath = `${cliShimDir}/${CLI_SHIM_FILENAME}`;
     relay = await startToolRelay({
@@ -141,21 +146,15 @@ async function runTurn(start: StartMessage, turn: BridgeTurn): Promise<void> {
       emit,
       requestToolResult: turn.requestToolResult,
     });
-    mcpServers['harness-tools'] = {
-      enabled: true,
-      command: 'node',
-      args: [`${bootstrapDir}/host-tool-mcp.mjs`],
-      env: {
-        TOOL_SCHEMAS: JSON.stringify(
-          start.tools.map(t => ({
-            name: t.name,
-            description: t.description,
-            inputSchema: t.inputSchema,
-          })),
-        ),
-        TOOL_RELAY_URL: `http://127.0.0.1:${relay.port}`,
-      },
-    };
+    toolSchemasPath = await writeToolSchemasFile({
+      bridgeStateDir,
+      tools: start.tools,
+    });
+    mcpServers['harness-tools'] = buildHarnessToolsMcpServerConfig({
+      bootstrapDir,
+      relayPort: relay.port,
+      toolSchemasPath,
+    });
     // Temporary workaround for upstream codex MCP-tool bug — see ./cli-relay.ts
     await mkdir(cliShimDir, { recursive: true });
     await writeFile(
@@ -278,6 +277,9 @@ async function runTurn(start: StartMessage, turn: BridgeTurn): Promise<void> {
     return;
   } finally {
     relay?.close();
+    if (toolSchemasPath) {
+      await rm(toolSchemasPath, { force: true }).catch(() => {});
+    }
   }
 
   emit({

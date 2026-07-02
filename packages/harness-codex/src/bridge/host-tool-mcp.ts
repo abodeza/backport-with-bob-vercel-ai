@@ -4,6 +4,7 @@
 // over MCP-stdio and round-trips each call to the bridge's HTTP relay.
 //
 // Env vars (set by the bridge when starting a turn):
+//   TOOL_SCHEMAS_PATH — path to JSON array of { name, description, inputSchema }
 //   TOOL_SCHEMAS    — JSON array of { name, description, inputSchema }
 //   TOOL_RELAY_URL  — http://127.0.0.1:<port> of the bridge relay server
 // Relay authorization is issued by bridge runtime events, not an env token.
@@ -28,6 +29,7 @@
 import * as mcpServerModule from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as mcpStdioModule from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod/v4';
+import { readToolSchemasFromEnvironment } from './tool-schemas';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const { McpServer } = mcpServerModule as any;
@@ -54,12 +56,12 @@ type JsonSchemaObject = {
   nullable?: boolean;
 };
 
-const schemas: ToolSchema[] = JSON.parse(process.env.TOOL_SCHEMAS || '[]');
+const schemas = (await readToolSchemasFromEnvironment()) as ToolSchema[];
 const relayUrl = process.env.TOOL_RELAY_URL || '';
 
 if (!schemas.length || !relayUrl) {
   process.stderr.write(
-    '[host-tool-mcp] Missing TOOL_SCHEMAS or TOOL_RELAY_URL; exiting\n',
+    '[host-tool-mcp] Missing TOOL_SCHEMAS_PATH/TOOL_SCHEMAS or TOOL_RELAY_URL; exiting\n',
   );
   process.exit(0);
 }
