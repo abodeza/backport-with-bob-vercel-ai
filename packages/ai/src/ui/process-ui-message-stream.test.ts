@@ -7750,7 +7750,7 @@ describe('processUIMessageStream', () => {
       });
     });
 
-    it('reproduces issue #16543: preserves signature when transitioning to approval-responded', async () => {
+    it('preserves signature when transitioning to approval-responded', async () => {
       const toolPart = state!.message.parts.find(
         part => part.type === 'tool-tool1',
       ) as any;

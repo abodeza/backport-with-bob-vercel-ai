@@ -2597,7 +2597,7 @@ describe('Chat', () => {
   });
 
   describe('addToolApprovalResponse', () => {
-    it('reproduces issue #16543: preserves approval signature when responding manually', async () => {
+    it('preserves approval signature when responding manually', async () => {
       const chat = new TestChat({
         id: '123',
         generateId: mockId({ prefix: 'newid' }),
