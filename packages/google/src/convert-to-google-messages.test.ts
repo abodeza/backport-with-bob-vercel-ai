@@ -1886,8 +1886,10 @@ describe('Gemini 3 missing thoughtSignature mitigation', () => {
         thoughtSignature: undefined,
       },
     ]);
-    expect(assistant?.parts[1]?.thoughtSignature).not.toBe(
-      SKIP_THOUGHT_SIGNATURE_VALIDATOR,
+    expect(assistant?.parts[1]).not.toEqual(
+      expect.objectContaining({
+        thoughtSignature: SKIP_THOUGHT_SIGNATURE_VALIDATOR,
+      }),
     );
     expect(onWarning).not.toHaveBeenCalled();
   });

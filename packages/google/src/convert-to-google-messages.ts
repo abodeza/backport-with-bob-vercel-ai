@@ -333,6 +333,10 @@ export function convertToGoogleMessages(
 
       case 'assistant': {
         systemMessagesAllowed = false;
+        // Gemini 3 can return one thought signature for a batch of parallel
+        // tool calls, attached to the first functionCall. Subsequent unsigned
+        // calls in the same batch should replay without the skip sentinel.
+        let toolCallBatchHasThoughtSignature = false;
 
         contents.push({
           role: 'model',
@@ -346,6 +350,7 @@ export function convertToGoogleMessages(
 
               switch (part.type) {
                 case 'text': {
+                  toolCallBatchHasThoughtSignature = false;
                   return part.text.length === 0
                     ? undefined
                     : {
@@ -355,6 +360,7 @@ export function convertToGoogleMessages(
                 }
 
                 case 'reasoning': {
+                  toolCallBatchHasThoughtSignature = false;
                   return part.text.length === 0
                     ? undefined
                     : {
@@ -365,6 +371,7 @@ export function convertToGoogleMessages(
                 }
 
                 case 'reasoning-file': {
+                  toolCallBatchHasThoughtSignature = false;
                   switch (part.data.type) {
                     case 'url': {
                       throw new UnsupportedFunctionalityError({
@@ -387,6 +394,7 @@ export function convertToGoogleMessages(
                 }
 
                 case 'file': {
+                  toolCallBatchHasThoughtSignature = false;
                   switch (part.data.type) {
                     case 'url': {
                       throw new UnsupportedFunctionalityError({
@@ -456,10 +464,17 @@ export function convertToGoogleMessages(
                     providerOpts?.serverToolType != null
                       ? String(providerOpts.serverToolType)
                       : undefined;
+                  const hasBatchThoughtSignature =
+                    toolCallBatchHasThoughtSignature;
+                  if (thoughtSignature != null) {
+                    toolCallBatchHasThoughtSignature = true;
+                  }
                   const effectiveThoughtSignature =
                     thoughtSignature ??
                     (isGemini3Model
-                      ? injectSkipSignature(part.toolName)
+                      ? hasBatchThoughtSignature
+                        ? undefined
+                        : injectSkipSignature(part.toolName)
                       : undefined);
 
                   if (serverToolCallId && serverToolType) {
@@ -489,6 +504,7 @@ export function convertToGoogleMessages(
                 }
 
                 case 'tool-result': {
+                  toolCallBatchHasThoughtSignature = false;
                   const serverToolCallId =
                     providerOpts?.serverToolCallId != null
                       ? String(providerOpts.serverToolCallId)
