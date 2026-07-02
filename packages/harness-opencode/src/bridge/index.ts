@@ -4,7 +4,7 @@ import {
   type BridgeTurn,
 } from '@ai-sdk/harness/bridge';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import path from 'node:path';
 import { argv, env as procEnv } from 'node:process';
@@ -14,6 +14,11 @@ import {
   createOpencodeClient,
   createOpencodeServer,
 } from '@opencode-ai/sdk/v2';
+import { serializeToolSchemas } from './host-tool-schemas';
+import {
+  buildHostToolMcpEnvironment,
+  buildOpenCodePermissionConfig,
+} from './opencode-config';
 import {
   emitMissingFinalDelta,
   getOpenCodeEventSessionId,
@@ -173,6 +178,10 @@ async function ensureRuntime({
       requestToolResult: turn.requestToolResult,
     });
   }
+  const toolSchemasPath =
+    runtime.relay && start.tools && start.tools.length > 0
+      ? writeHostToolSchemas(start.tools)
+      : undefined;
 
   const server = await createOpencodeServer({
     hostname: '127.0.0.1',
@@ -181,6 +190,7 @@ async function ensureRuntime({
     config: buildOpenCodeConfig({
       start,
       relayPort: runtime.relay?.port,
+      toolSchemasPath,
     }) as never,
   });
   runtime.server = server;
@@ -193,62 +203,48 @@ async function ensureRuntime({
 function buildOpenCodeConfig({
   start,
   relayPort,
+  toolSchemasPath,
 }: {
   start: StartMessage;
   relayPort: number | undefined;
+  toolSchemasPath: string | undefined;
 }): Record<string, unknown> {
+  const inactiveToolNames = resolveInactiveBuiltinToolNames(start);
   const config: Record<string, unknown> = {
     share: 'disabled',
     autoupdate: false,
-    permission: {
-      read: 'allow',
-      glob: 'allow',
-      grep: 'allow',
-      list: 'allow',
-      edit: 'ask',
-      bash: 'ask',
-      external_directory: 'ask',
-      webfetch: 'ask',
-      doom_loop: 'ask',
-      task: 'ask',
-    },
+    permission: buildOpenCodePermissionConfig({
+      permissionMode: start.permissionMode,
+      inactiveToolNames,
+    }),
   };
   if (start.model) config.model = start.model;
   if (skillsDir) config.skills = { paths: [skillsDir] };
-  const inactiveToolNames = resolveInactiveBuiltinToolNames(start);
-  const permission = config.permission as Record<string, unknown>;
-  for (const toolName of inactiveToolNames) {
-    const permissionName = toPermissionToolName(
-      PUBLIC_TO_NATIVE[toolName] ?? toolName,
-    );
-    if (permissionName === 'ls') {
-      permission.list = 'ask';
-    } else {
-      permission[permissionName] = 'ask';
-    }
-  }
   const provider = buildProviderConfig(start);
   if (provider) config.provider = provider;
-  if (relayPort && start.tools && start.tools.length > 0) {
+  if (relayPort && toolSchemasPath) {
     config.mcp = {
       'harness-tools': {
         type: 'local',
         enabled: true,
         command: ['node', `${bootstrapDir}/host-tool-mcp.mjs`],
-        environment: {
-          TOOL_SCHEMAS: JSON.stringify(
-            start.tools.map(t => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: t.inputSchema,
-            })),
-          ),
-          TOOL_RELAY_URL: `http://127.0.0.1:${relayPort}`,
-        },
+        environment: buildHostToolMcpEnvironment({
+          relayPort,
+          toolSchemasPath,
+        }),
       },
     };
   }
   return config;
+}
+
+function writeHostToolSchemas(
+  tools: NonNullable<StartMessage['tools']>,
+): string {
+  mkdirSync(bridgeStateDir, { recursive: true });
+  const toolSchemasPath = path.join(bridgeStateDir, 'host-tool-schemas.json');
+  writeFileSync(toolSchemasPath, serializeToolSchemas(tools));
+  return toolSchemasPath;
 }
 
 function buildProviderConfig(

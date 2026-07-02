@@ -19,6 +19,7 @@ export default defineConfig([
     dts: false,
     sourcemap: true,
     platform: 'node',
+    splitting: false,
     noExternal: ['@ai-sdk/harness'],
     external: [
       '@opencode-ai/sdk/v2',

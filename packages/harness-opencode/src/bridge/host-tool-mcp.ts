@@ -7,35 +7,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod/v4';
-
-type ToolSchema = {
-  name: string;
-  description?: string;
-  inputSchema?: JsonSchemaObject;
-};
-
-type JsonSchemaObject = {
-  type?: string | string[];
-  description?: string;
-  properties?: Record<string, JsonSchemaObject>;
-  required?: string[];
-  items?: JsonSchemaObject;
-  enum?: unknown[];
-  const?: unknown;
-  oneOf?: JsonSchemaObject[];
-  anyOf?: JsonSchemaObject[];
-  additionalProperties?: boolean | JsonSchemaObject;
-  nullable?: boolean;
-};
+import {
+  readToolSchemasFromEnvironment,
+  type JsonSchemaObject,
+} from './host-tool-schemas';
 
 type ZodShape = Record<string, z.ZodTypeAny>;
 
-const schemas: ToolSchema[] = JSON.parse(process.env.TOOL_SCHEMAS || '[]');
+const schemas = readToolSchemasFromEnvironment(process.env);
 const relayUrl = process.env.TOOL_RELAY_URL || '';
 
 if (!schemas.length || !relayUrl) {
   process.stderr.write(
-    '[host-tool-mcp] Missing TOOL_SCHEMAS or TOOL_RELAY_URL; exiting\n',
+    '[host-tool-mcp] Missing TOOL_SCHEMAS_PATH/TOOL_SCHEMAS or TOOL_RELAY_URL; exiting\n',
   );
   process.exit(0);
 }
