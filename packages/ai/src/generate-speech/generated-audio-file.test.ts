@@ -1,7 +1,4 @@
-import {
-  AISDKError,
-  InvalidResponseDataError,
-} from '@ai-sdk/provider';
+import { AISDKError, InvalidResponseDataError } from '@ai-sdk/provider';
 import { describe, expect, it } from 'vitest';
 import { DefaultGeneratedAudioFile } from './generated-audio-file';
 
@@ -20,5 +17,9 @@ describe('DefaultGeneratedAudioFile', () => {
 
     expect(AISDKError.isInstance(error)).toBe(true);
     expect(InvalidResponseDataError.isInstance(error)).toBe(true);
+    expect(error).toMatchObject({
+      data: 'audio/',
+      message: 'Could not determine audio format from media type: audio/',
+    });
   });
 });
