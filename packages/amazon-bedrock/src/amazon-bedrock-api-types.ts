@@ -154,9 +154,15 @@ export interface AmazonBedrockDocumentBlock {
   document: {
     format: AmazonBedrockDocumentFormat;
     name: string;
-    source: {
-      bytes: string;
-    };
+    source:
+      | {
+          bytes: string;
+        }
+      | {
+          s3Location: {
+            uri: string;
+          };
+        };
     citations?: {
       enabled: boolean;
     };
@@ -170,9 +176,15 @@ export interface AmazonBedrockGuardrailConverseContentBlock {
 export interface AmazonBedrockImageBlock {
   image: {
     format: AmazonBedrockImageFormat;
-    source: {
-      bytes: string;
-    };
+    source:
+      | {
+          bytes: string;
+        }
+      | {
+          s3Location: {
+            uri: string;
+          };
+        };
   };
 }
 

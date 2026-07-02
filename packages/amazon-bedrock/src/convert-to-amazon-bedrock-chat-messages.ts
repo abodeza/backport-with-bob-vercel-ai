@@ -1,6 +1,7 @@
 import {
   UnsupportedFunctionalityError,
   type JSONObject,
+  type LanguageModelV4FilePart,
   type LanguageModelV4Message,
   type LanguageModelV4Prompt,
   type SharedV4ProviderMetadata,
@@ -54,6 +55,40 @@ function pushCachePoint(
   const cachePoint = getCachePoint(providerMetadata);
   if (cachePoint) {
     content.push(cachePoint);
+  }
+}
+
+function isS3Url(url: URL): boolean {
+  return url.protocol === 's3:';
+}
+
+function getAmazonBedrockFileSource({
+  data,
+  functionality,
+}: {
+  data: Extract<LanguageModelV4FilePart['data'], { type: 'data' | 'url' }>;
+  functionality: string;
+}):
+  | { bytes: string }
+  | {
+      s3Location: {
+        uri: string;
+      };
+    } {
+  switch (data.type) {
+    case 'data':
+      return { bytes: convertToBase64(data.data) };
+    case 'url': {
+      if (isS3Url(data.url)) {
+        return {
+          s3Location: {
+            uri: data.url.toString(),
+          },
+        };
+      }
+
+      throw new UnsupportedFunctionalityError({ functionality });
+    }
   }
 }
 
@@ -141,9 +176,48 @@ export async function convertToAmazonBedrockChatMessages(
                         });
                       }
                       case 'url': {
-                        throw new UnsupportedFunctionalityError({
-                          functionality: 'File URL data',
-                        });
+                        if (!isS3Url(part.data.url)) {
+                          throw new UnsupportedFunctionalityError({
+                            functionality: 'File URL data',
+                          });
+                        }
+
+                        const fullMediaType = resolveFullMediaType({ part });
+
+                        if (getTopLevelMediaType(fullMediaType) === 'image') {
+                          amazonBedrockContent.push({
+                            image: {
+                              format:
+                                getAmazonBedrockImageFormat(fullMediaType),
+                              source: getAmazonBedrockFileSource({
+                                data: part.data,
+                                functionality: 'File URL data',
+                              }),
+                            },
+                          });
+                        } else {
+                          const enableCitations = await shouldEnableCitations(
+                            part.providerOptions,
+                          );
+
+                          amazonBedrockContent.push({
+                            document: {
+                              format:
+                                getAmazonBedrockDocumentFormat(fullMediaType),
+                              name: part.filename
+                                ? stripFileExtension(part.filename)
+                                : generateDocumentName(),
+                              source: getAmazonBedrockFileSource({
+                                data: part.data,
+                                functionality: 'File URL data',
+                              }),
+                              ...(enableCitations && {
+                                citations: { enabled: true },
+                              }),
+                            },
+                          });
+                        }
+                        break;
                       }
                       case 'text': {
                         const textMediaType = isFullMediaType(part.mediaType)
@@ -180,9 +254,10 @@ export async function convertToAmazonBedrockChatMessages(
                             image: {
                               format:
                                 getAmazonBedrockImageFormat(fullMediaType),
-                              source: {
-                                bytes: convertToBase64(part.data.data),
-                              },
+                              source: getAmazonBedrockFileSource({
+                                data: part.data,
+                                functionality: 'File URL data',
+                              }),
                             },
                           });
                         } else {
@@ -197,9 +272,10 @@ export async function convertToAmazonBedrockChatMessages(
                               name: part.filename
                                 ? stripFileExtension(part.filename)
                                 : generateDocumentName(),
-                              source: {
-                                bytes: convertToBase64(part.data.data),
-                              },
+                              source: getAmazonBedrockFileSource({
+                                data: part.data,
+                                functionality: 'File URL data',
+                              }),
                               ...(enableCitations && {
                                 citations: { enabled: true },
                               }),
@@ -235,7 +311,19 @@ export async function convertToAmazonBedrockChatMessages(
                           case 'text':
                             return { text: contentPart.text };
                           case 'file': {
-                            if (contentPart.data.type !== 'data') {
+                            if (
+                              contentPart.data.type !== 'data' &&
+                              contentPart.data.type !== 'url'
+                            ) {
+                              throw new UnsupportedFunctionalityError({
+                                functionality: `tool result file data of type "${contentPart.data.type}"`,
+                              });
+                            }
+
+                            if (
+                              contentPart.data.type === 'url' &&
+                              !isS3Url(contentPart.data.url)
+                            ) {
                               throw new UnsupportedFunctionalityError({
                                 functionality: `tool result file data of type "${contentPart.data.type}"`,
                               });
@@ -262,11 +350,10 @@ export async function convertToAmazonBedrockChatMessages(
                                   name: contentPart.filename
                                     ? stripFileExtension(contentPart.filename)
                                     : generateDocumentName(),
-                                  source: {
-                                    bytes: convertToBase64(
-                                      contentPart.data.data,
-                                    ),
-                                  },
+                                  source: getAmazonBedrockFileSource({
+                                    data: contentPart.data,
+                                    functionality: `tool result file data of type "${contentPart.data.type}"`,
+                                  }),
                                   ...(enableCitations && {
                                     citations: { enabled: true },
                                   }),
@@ -278,9 +365,10 @@ export async function convertToAmazonBedrockChatMessages(
                               image: {
                                 format:
                                   getAmazonBedrockImageFormat(fullMediaType),
-                                source: {
-                                  bytes: convertToBase64(contentPart.data.data),
-                                },
+                                source: getAmazonBedrockFileSource({
+                                  data: contentPart.data,
+                                  functionality: `tool result file data of type "${contentPart.data.type}"`,
+                                }),
                               },
                             };
                           }

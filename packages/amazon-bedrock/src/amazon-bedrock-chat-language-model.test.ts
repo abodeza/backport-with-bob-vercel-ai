@@ -108,6 +108,20 @@ const server = createTestServer({
   [newerAnthropicGenerateUrl]: {},
 });
 
+describe('supportedUrls', () => {
+  it('should support s3 URLs for image parts', () => {
+    const model = new AmazonBedrockChatLanguageModel(modelId, {
+      baseUrl: () => baseUrl,
+      generateId: () => 'test-id',
+      fetch: fakeFetchWithAuth,
+    });
+
+    expect(model.supportedUrls).toEqual({
+      'image/*': [/^s3:\/\//],
+    });
+  });
+});
+
 function prepareJsonFixtureResponse(
   filename: string,
   { headers }: { headers?: Record<string, string> } = {},
