@@ -558,9 +558,22 @@ class DefaultMCPClient implements MCPClient {
 
       const cleanup = () => {
         this.responseHandlers.delete(messageId);
+        signal?.removeEventListener('abort', handleAbort);
+      };
+
+      const handleAbort = () => {
+        cleanup();
+        reject(
+          new MCPClientError({
+            message: 'Request was aborted',
+            cause: signal?.reason,
+          }),
+        );
       };
 
       this.responseHandlers.set(messageId, response => {
+        cleanup();
+
         if (signal?.aborted) {
           return reject(
             new MCPClientError({
@@ -585,6 +598,8 @@ class DefaultMCPClient implements MCPClient {
           reject(parseError);
         }
       });
+
+      signal?.addEventListener('abort', handleAbort, { once: true });
 
       this.transport.send(jsonrpcRequest).catch(error => {
         cleanup();

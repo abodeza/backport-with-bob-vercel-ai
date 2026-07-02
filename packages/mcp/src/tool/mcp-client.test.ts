@@ -202,6 +202,45 @@ class FailsFirstToolCallTransport implements MCPTransport {
   }
 }
 
+class HangingToolCallTransport implements MCPTransport {
+  sentMessages: JSONRPCMessage[] = [];
+
+  onmessage?: (message: JSONRPCMessage) => void;
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+
+  async start(): Promise<void> {}
+
+  async send(message: JSONRPCMessage): Promise<void> {
+    this.sentMessages.push(message);
+
+    if (!('method' in message) || !('id' in message)) {
+      return;
+    }
+
+    if (message.method === 'initialize') {
+      this.onmessage?.({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          protocolVersion: LATEST_PROTOCOL_VERSION,
+          serverInfo: { name: 'hanging-tool-call-server', version: '1.0.0' },
+          capabilities: { tools: {} },
+        },
+      });
+      return;
+    }
+
+    if (message.method === 'tools/call') {
+      return;
+    }
+  }
+
+  async close(): Promise<void> {
+    this.onclose?.();
+  }
+}
+
 vi.mock('./mcp-transport.ts', async importOriginal => {
   const actual = await importOriginal<typeof McpTransportModule>();
   return {
@@ -1657,6 +1696,39 @@ describe('MCPClient', () => {
     ).rejects.toSatisfy(
       error => error instanceof Error && error.name === 'AbortError',
     );
+  });
+
+  it('should reject in-flight tool calls and clean up the response handler when aborted', async () => {
+    const transport = new HangingToolCallTransport();
+    client = await createMCPClient({ transport });
+    const responseHandlers = (
+      client as unknown as {
+        responseHandlers: Map<number, unknown>;
+      }
+    ).responseHandlers;
+    const controller = new AbortController();
+    const abortReason = new Error('user aborted request');
+
+    const callToolPromise = client.callTool({
+      name: 'mock-tool',
+      arguments: {},
+      options: { signal: controller.signal },
+    });
+
+    expect(
+      transport.sentMessages.some(
+        message => 'method' in message && message.method === 'tools/call',
+      ),
+    ).toBe(true);
+    expect(responseHandlers.size).toBe(1);
+
+    controller.abort(abortReason);
+
+    await expect(callToolPromise).rejects.toMatchObject({
+      message: 'Request was aborted',
+      cause: abortReason,
+    });
+    expect(responseHandlers.size).toBe(0);
   });
 
   describe('elicitation support', () => {
