@@ -229,10 +229,6 @@ export class OpenResponsesLanguageModel implements LanguageModelV4 {
       fetch: this.config.fetch,
     });
 
-    // A successful Responses payload always includes `output`. Some upstreams
-    // instead return a 200 whose body has no `output` (e.g. a failed/incomplete
-    // generation), which previously threw an opaque "output is not iterable"
-    // TypeError. Surface a descriptive error instead.
     if (response.output == null) {
       const detail = response.incomplete_details?.reason ?? response.status;
       throw new APICallError({

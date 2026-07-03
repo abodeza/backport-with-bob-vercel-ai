@@ -544,10 +544,6 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV4 {
       });
     }
 
-    // A successful Responses payload always includes `output`. Some
-    // OpenAI-compatible upstreams instead return a 200 whose body has no
-    // `output` (e.g. a failed/incomplete generation), which previously threw an
-    // opaque "output is not iterable" TypeError. Surface a descriptive error.
     if (response.output == null) {
       const detail = response.incomplete_details?.reason;
       throw new APICallError({
