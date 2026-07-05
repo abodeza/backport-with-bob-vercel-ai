@@ -78,6 +78,32 @@ describe('prepareTools', () => {
     `);
   });
 
+  it('reproduces #12020: drops a Zod schema supplied as parameters', async () => {
+    const result = await prepareTools({
+      tools: {
+        detectVoice: tool({
+          description: 'Classify voice style',
+          parameters: z.object({
+            quadrant: z.string().describe('The voice quadrant'),
+          }),
+        } as any),
+      },
+    });
+
+    expect(result?.[0]).toMatchObject({
+      inputSchema: {
+        type: 'object',
+        properties: {
+          quadrant: {
+            type: 'string',
+            description: 'The voice quadrant',
+          },
+        },
+        required: ['quadrant'],
+      },
+    });
+  });
+
   it('handles provider-defined tools', async () => {
     const result = await prepareTools({ tools: mockToolsWithProviderDefined });
 
