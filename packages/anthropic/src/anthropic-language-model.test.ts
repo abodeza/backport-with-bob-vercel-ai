@@ -9370,6 +9370,78 @@ describe('AnthropicLanguageModel', () => {
             ]
           `);
       });
+
+      it('should support forced tools with empty parameters in streaming', async () => {
+        prepareChunksFixtureResponse(
+          'anthropic-issue-11674-empty-schema-forced-tool-call.1',
+        );
+
+        const result = await provider('claude-haiku-4-5').doStream({
+          tools: [
+            {
+              type: 'function',
+              name: 'sayHello',
+              description: 'Say hello',
+              inputSchema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+                $schema: 'http://json-schema.org/draft-07/schema#',
+              },
+            },
+          ],
+          toolChoice: { type: 'tool', toolName: 'sayHello' },
+          prompt: [
+            { role: 'user', content: [{ type: 'text', text: 'Say hello!' }] },
+          ],
+        });
+
+        expect(await server.calls[0].requestBodyJson).toMatchObject({
+          tool_choice: { type: 'tool', name: 'sayHello' },
+          tools: [
+            {
+              name: 'sayHello',
+              input_schema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false,
+                $schema: 'http://json-schema.org/draft-07/schema#',
+              },
+            },
+          ],
+        });
+
+        const chunks = await convertReadableStreamToArray(result.stream);
+        const toolCall = chunks.find(
+          (chunk): chunk is LanguageModelV4StreamPart & { type: 'tool-call' } =>
+            chunk.type === 'tool-call',
+        );
+        const finish = chunks.find(chunk => chunk.type === 'finish');
+
+        expect(toolCall).toMatchObject({
+          type: 'tool-call',
+          toolCallId: 'toolu_01ShZKk3kJGrMg3LqcfyHLBA',
+          toolName: 'sayHello',
+          input: '{}',
+          providerMetadata: {
+            anthropic: {
+              caller: {
+                type: 'direct',
+                toolId: undefined,
+              },
+            },
+          },
+        });
+        expect(finish).toMatchObject({
+          type: 'finish',
+          finishReason: {
+            raw: 'tool_use',
+            unified: 'tool-calls',
+          },
+        });
+      });
     });
 
     describe('programmatic tool calling', () => {
