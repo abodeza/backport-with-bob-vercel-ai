@@ -151,10 +151,10 @@ export const anthropicLanguageModelOptions = z.object({
    * as the `anthropic-user-profile-id` request header. Claude in Amazon Bedrock
    * sends it as the `user_profile_id` request body field.
    *
-   * The required `user-profiles-2026-03-24` beta is added automatically on the
-   * header path.
+   * The `user-profiles-2026-03-24` beta is added automatically on the header
+   * path (required on the Anthropic API and Claude Platform on AWS).
    */
-  userProfileId: z.string().optional(),
+  userProfileId: z.string().min(1).optional(),
 
   /**
    * MCP servers to be utilized in this request.

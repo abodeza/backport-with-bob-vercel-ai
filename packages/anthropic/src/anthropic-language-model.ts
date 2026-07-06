@@ -68,8 +68,11 @@ import { sanitizeJsonSchema } from './sanitize-json-schema';
 
 const ANTHROPIC_USER_PROFILE_ID_HEADER = 'anthropic-user-profile-id';
 /**
- * Anthropic requires this beta on inference requests that carry
- * `anthropic-user-profile-id`. Not needed on the Bedrock body path.
+ * Sent alongside `anthropic-user-profile-id` on inference requests. Required
+ * on the Anthropic API and Claude Platform on AWS; also sent on Vertex
+ * Anthropic where it is accepted (matches the AI Gateway's production
+ * behavior). Not sent on the Bedrock body path, which takes the profile as a
+ * `user_profile_id` body field with no beta.
  */
 const ANTHROPIC_USER_PROFILES_BETA = 'user-profiles-2026-03-24';
 
@@ -143,6 +146,12 @@ type AnthropicLanguageModelConfig = {
     betas: Set<string>,
     userProfileId?: string,
   ) => Record<string, any>;
+  /**
+   * Where the provider surface takes the Anthropic user profile ID.
+   * Defaults to `'header'` (`anthropic-user-profile-id` + user-profiles
+   * beta); `'body'` suppresses both and delivers the ID to
+   * `transformRequestBody` instead (Bedrock InvokeModel).
+   */
   userProfileIdLocation?: 'body' | 'header';
   supportedUrls?: () => LanguageModelV4['supportedUrls'];
   generateId?: () => string;
