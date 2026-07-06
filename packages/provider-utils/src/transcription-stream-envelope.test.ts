@@ -1,0 +1,258 @@
+import type { Experimental_TranscriptionModelV4StreamPart } from '@ai-sdk/provider';
+import { describe, expect, it } from 'vitest';
+import {
+  parseTranscriptionStreamClientFrame,
+  parseTranscriptionStreamPart,
+  serializeTranscriptionStreamPart,
+  TRANSCRIPTION_STREAM_AUDIO_DONE_FRAME_TYPE,
+  TRANSCRIPTION_STREAM_START_FRAME_TYPE,
+} from './transcription-stream-envelope';
+
+describe('frame type constants', () => {
+  it('should use the transcription-stream namespace', () => {
+    expect(TRANSCRIPTION_STREAM_START_FRAME_TYPE).toBe(
+      'transcription-stream.start',
+    );
+    expect(TRANSCRIPTION_STREAM_AUDIO_DONE_FRAME_TYPE).toBe(
+      'transcription-stream.audio-done',
+    );
+  });
+});
+
+describe('parseTranscriptionStreamClientFrame', () => {
+  it('should parse a minimal start frame', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({
+          type: 'transcription-stream.start',
+          inputAudioFormat: { type: 'audio/pcm' },
+        }),
+      ),
+    ).toEqual({
+      type: 'start',
+      frame: {
+        type: 'transcription-stream.start',
+        inputAudioFormat: { type: 'audio/pcm' },
+      },
+    });
+  });
+
+  it('should parse a full start frame', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({
+          type: 'transcription-stream.start',
+          inputAudioFormat: { type: 'audio/pcm', rate: 16000 },
+          providerOptions: { openai: { language: 'en' } },
+          includeRawChunks: true,
+        }),
+      ),
+    ).toEqual({
+      type: 'start',
+      frame: {
+        type: 'transcription-stream.start',
+        inputAudioFormat: { type: 'audio/pcm', rate: 16000 },
+        providerOptions: { openai: { language: 'en' } },
+        includeRawChunks: true,
+      },
+    });
+  });
+
+  it('should not restrict the audio format type', () => {
+    const result = parseTranscriptionStreamClientFrame(
+      JSON.stringify({
+        type: 'transcription-stream.start',
+        inputAudioFormat: { type: 'audio/some-future-format' },
+      }),
+    );
+    expect(result.type).toBe('start');
+  });
+
+  it('should parse an audio-done frame', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({ type: 'transcription-stream.audio-done' }),
+      ),
+    ).toEqual({ type: 'audio-done' });
+  });
+
+  it('should classify unrecognized frame types as unknown', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({ type: 'transcription-stream.some-future-frame' }),
+      ),
+    ).toEqual({ type: 'unknown' });
+  });
+
+  it('should classify malformed JSON as invalid', () => {
+    expect(parseTranscriptionStreamClientFrame('{not json')).toEqual({
+      type: 'invalid',
+      message: 'malformed JSON',
+    });
+  });
+
+  it.each([['"a string"'], ['[1, 2]'], ['null'], ['42']])(
+    'should classify non-object JSON as invalid: %s',
+    text => {
+      expect(parseTranscriptionStreamClientFrame(text).type).toBe('invalid');
+    },
+  );
+
+  it('should classify a missing frame type as invalid', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(JSON.stringify({ foo: 'bar' })),
+    ).toEqual({
+      type: 'invalid',
+      message: 'frame type must be a string',
+    });
+  });
+
+  it('should classify a start frame without inputAudioFormat as invalid', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({ type: 'transcription-stream.start' }),
+      ).type,
+    ).toBe('invalid');
+  });
+
+  it('should classify a start frame with a non-string format type as invalid', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({
+          type: 'transcription-stream.start',
+          inputAudioFormat: { type: 42 },
+        }),
+      ).type,
+    ).toBe('invalid');
+  });
+
+  it('should classify a start frame with a non-number rate as invalid', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({
+          type: 'transcription-stream.start',
+          inputAudioFormat: { type: 'audio/pcm', rate: '16000' },
+        }),
+      ).type,
+    ).toBe('invalid');
+  });
+
+  it('should classify a start frame with non-object providerOptions as invalid', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({
+          type: 'transcription-stream.start',
+          inputAudioFormat: { type: 'audio/pcm' },
+          providerOptions: 'nope',
+        }),
+      ).type,
+    ).toBe('invalid');
+  });
+
+  it('should classify a start frame with non-boolean includeRawChunks as invalid', () => {
+    expect(
+      parseTranscriptionStreamClientFrame(
+        JSON.stringify({
+          type: 'transcription-stream.start',
+          inputAudioFormat: { type: 'audio/pcm' },
+          includeRawChunks: 'yes',
+        }),
+      ).type,
+    ).toBe('invalid');
+  });
+});
+
+describe('serializeTranscriptionStreamPart', () => {
+  it('should serialize parts as JSON', () => {
+    expect(
+      serializeTranscriptionStreamPart({
+        type: 'transcript-delta',
+        id: 'seg-1',
+        delta: 'Hel',
+      }),
+    ).toBe('{"type":"transcript-delta","id":"seg-1","delta":"Hel"}');
+  });
+
+  it('should serialize response-metadata timestamps as ISO strings', () => {
+    expect(
+      serializeTranscriptionStreamPart({
+        type: 'response-metadata',
+        timestamp: new Date('2026-01-01T00:00:00.000Z'),
+        modelId: 'openai/gpt-realtime-whisper',
+      }),
+    ).toBe(
+      '{"type":"response-metadata","timestamp":"2026-01-01T00:00:00.000Z","modelId":"openai/gpt-realtime-whisper"}',
+    );
+  });
+});
+
+describe('parseTranscriptionStreamPart', () => {
+  it.each<Experimental_TranscriptionModelV4StreamPart>([
+    { type: 'stream-start', warnings: [] },
+    { type: 'transcript-delta', id: 'seg-1', delta: 'Hel' },
+    { type: 'transcript-partial', id: 'seg-1', text: 'Hel' },
+    { type: 'transcript-final', id: 'seg-1', text: 'Hello' },
+    { type: 'raw', rawValue: { some: 'chunk' } },
+    { type: 'error', error: 'model overloaded' },
+    {
+      type: 'finish',
+      text: 'Hello',
+      segments: [{ text: 'Hello', startSecond: 0, endSecond: 1 }],
+      language: 'en',
+    },
+  ])('should round-trip a $type part', part => {
+    expect(
+      parseTranscriptionStreamPart(serializeTranscriptionStreamPart(part)),
+    ).toEqual(part);
+  });
+
+  it('should revive response-metadata timestamps to Date', () => {
+    const part = parseTranscriptionStreamPart(
+      serializeTranscriptionStreamPart({
+        type: 'response-metadata',
+        timestamp: new Date('2026-01-01T00:00:00.000Z'),
+        modelId: 'openai/gpt-realtime-whisper',
+      }),
+    );
+
+    expect(part).toEqual({
+      type: 'response-metadata',
+      timestamp: new Date('2026-01-01T00:00:00.000Z'),
+      modelId: 'openai/gpt-realtime-whisper',
+    });
+    expect(part?.type === 'response-metadata' && part.timestamp).toBeInstanceOf(
+      Date,
+    );
+  });
+
+  it('should keep a missing response-metadata timestamp undefined', () => {
+    expect(
+      parseTranscriptionStreamPart(
+        JSON.stringify({ type: 'response-metadata', modelId: 'model-1' }),
+      ),
+    ).toEqual({
+      type: 'response-metadata',
+      timestamp: undefined,
+      modelId: 'model-1',
+    });
+  });
+
+  it('should return undefined for malformed JSON', () => {
+    expect(parseTranscriptionStreamPart('{not json')).toBeUndefined();
+  });
+
+  it.each([['"a string"'], ['[1, 2]'], ['null'], ['42']])(
+    'should return undefined for non-object JSON: %s',
+    text => {
+      expect(parseTranscriptionStreamPart(text)).toBeUndefined();
+    },
+  );
+
+  it('should return undefined for unknown part types (forward compat)', () => {
+    expect(
+      parseTranscriptionStreamPart(
+        JSON.stringify({ type: 'some-future-part' }),
+      ),
+    ).toBeUndefined();
+  });
+});

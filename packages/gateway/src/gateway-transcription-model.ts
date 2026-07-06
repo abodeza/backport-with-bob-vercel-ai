@@ -13,10 +13,13 @@ import {
   createJsonErrorResponseHandler,
   createJsonResponseHandler,
   getWebSocketConstructor,
+  parseTranscriptionStreamPart,
   postJsonToApi,
   readWebSocketMessageText,
   resolve,
-  safeParseJSON,
+  TRANSCRIPTION_STREAM_AUDIO_DONE_FRAME_TYPE,
+  TRANSCRIPTION_STREAM_START_FRAME_TYPE,
+  type Experimental_TranscriptionStreamStartFrame,
   type Resolvable,
   type WebSocketConstructor,
   type WebSocketLike,
@@ -130,10 +133,11 @@ export class GatewayTranscriptionModel implements TranscriptionModelV4 {
     const authMethod = await parseAuthMethod(headers);
 
     // The session start frame is the first frame sent after the WebSocket
-    // opens. Optional keys are omitted (not sent as `undefined`/`null`) so the
-    // serialized frame stays minimal and unambiguous.
-    const startFrame = {
-      type: 'transcription-session.start' as const,
+    // opens, per the transcription-stream envelope. Optional keys are omitted
+    // (not sent as `undefined`/`null`) so the serialized frame stays minimal
+    // and unambiguous.
+    const startFrame: Experimental_TranscriptionStreamStartFrame = {
+      type: TRANSCRIPTION_STREAM_START_FRAME_TYPE,
       inputAudioFormat: options.inputAudioFormat,
       ...(options.providerOptions != null && {
         providerOptions: options.providerOptions,
@@ -219,7 +223,7 @@ function createGatewayTranscriptionStream({
   url: string;
   protocols: string[];
   headers: Record<string, string | undefined>;
-  startFrame: unknown;
+  startFrame: Experimental_TranscriptionStreamStartFrame;
   audio: ReadableStream<Uint8Array | string>;
   abortSignal: AbortSignal | undefined;
   authMethod: 'api-key' | 'oidc' | undefined;
@@ -294,7 +298,9 @@ function createGatewayTranscriptionStream({
         }
         if (!finished) {
           socket.send(
-            JSON.stringify({ type: 'transcription-session.audio-done' }),
+            JSON.stringify({
+              type: TRANSCRIPTION_STREAM_AUDIO_DONE_FRAME_TYPE,
+            }),
           );
         }
       };
@@ -304,44 +310,26 @@ function createGatewayTranscriptionStream({
         void sendAudio().catch(finishWithError);
       };
 
-      // The Gateway emits normalized AI SDK transcription stream parts, so
-      // each text frame is relayed as-is; only `response-metadata` needs its
-      // `timestamp` revived from the ISO string JSON serialization.
+      // The Gateway emits normalized AI SDK transcription stream parts,
+      // serialized per the shared transcription-stream envelope; the codec
+      // handles JSON parsing, unknown-part skipping (forward compatibility),
+      // and `response-metadata` timestamp revival.
       socket.onmessage = event => {
         void readWebSocketMessageText(event.data)
-          .then(async text => {
+          .then(text => {
             if (finished) return;
-            const parsed = await safeParseJSON({ text });
-            if (!parsed.success) return;
-            const part = parsed.value as TranscriptionModelV4StreamPart;
+            const part = parseTranscriptionStreamPart(text);
+            if (part == null) return;
 
-            switch (part.type) {
-              case 'error':
-              case 'raw':
-              case 'stream-start':
-              case 'transcript-delta':
-              case 'transcript-final':
-              case 'transcript-partial':
-                controller.enqueue(part);
-                break;
-
-              case 'response-metadata':
-                controller.enqueue({
-                  ...part,
-                  timestamp:
-                    part.timestamp != null
-                      ? new Date(part.timestamp)
-                      : undefined,
-                });
-                break;
-
-              case 'finish':
-                finished = true;
-                controller.enqueue(part);
-                controller.close();
-                cleanup(1000);
-                break;
+            if (part.type === 'finish') {
+              finished = true;
+              controller.enqueue(part);
+              controller.close();
+              cleanup(1000);
+              return;
             }
+
+            controller.enqueue(part);
           })
           .catch(finishWithError);
       };

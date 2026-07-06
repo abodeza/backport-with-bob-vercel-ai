@@ -381,14 +381,14 @@ describe('GatewayTranscriptionModel', () => {
       await flush();
 
       expect(JSON.parse(ws.send.mock.calls[0][0])).toEqual({
-        type: 'transcription-session.start',
+        type: 'transcription-stream.start',
         inputAudioFormat: { type: 'audio/pcm', rate: 16000 },
         providerOptions: { openai: { language: 'en' } },
         includeRawChunks: true,
       });
       expect(result.request).toEqual({
         body: {
-          type: 'transcription-session.start',
+          type: 'transcription-stream.start',
           inputAudioFormat: { type: 'audio/pcm', rate: 16000 },
           providerOptions: { openai: { language: 'en' } },
           includeRawChunks: true,
@@ -413,7 +413,7 @@ describe('GatewayTranscriptionModel', () => {
       await flush();
 
       expect(JSON.parse(ws.send.mock.calls[0][0])).toEqual({
-        type: 'transcription-session.start',
+        type: 'transcription-stream.start',
         inputAudioFormat: { type: 'audio/pcm' },
       });
 
@@ -440,7 +440,7 @@ describe('GatewayTranscriptionModel', () => {
       expect(ws.send.mock.calls[1][0]).toEqual(new Uint8Array([1, 2, 3]));
       expect(ws.send.mock.calls[2][0]).toEqual(new Uint8Array([4, 5, 6]));
       expect(JSON.parse(ws.send.mock.calls[3][0])).toEqual({
-        type: 'transcription-session.audio-done',
+        type: 'transcription-stream.audio-done',
       });
 
       ws.message({ type: 'finish', text: '', segments: [] });
@@ -527,6 +527,29 @@ describe('GatewayTranscriptionModel', () => {
         timestamp: new Date('2026-01-01T00:00:00.000Z'),
         modelId: 'openai/gpt-realtime-whisper',
       });
+    });
+
+    it('should ignore unknown server part types (forward compat)', async () => {
+      const model = createStreamingTestModel();
+
+      const result = await model.doStream({
+        audio: convertArrayToReadableStream([new Uint8Array([1, 2, 3])]),
+        inputAudioFormat: { type: 'audio/pcm', rate: 16000 },
+      });
+
+      const partsPromise = convertReadableStreamToArray(result.stream);
+      const ws = MockWebSocket.instances[0];
+      ws.open();
+      await flush();
+
+      ws.message({ type: 'some-future-part', payload: 42 });
+      ws.message({ type: 'transcript-delta', id: 'seg-1', delta: 'Hel' });
+      ws.message({ type: 'finish', text: 'Hel', segments: [] });
+
+      await expect(partsPromise).resolves.toEqual([
+        { type: 'transcript-delta', id: 'seg-1', delta: 'Hel' },
+        { type: 'finish', text: 'Hel', segments: [] },
+      ]);
     });
 
     it('should relay error parts and error the stream when the socket closes without finish', async () => {
