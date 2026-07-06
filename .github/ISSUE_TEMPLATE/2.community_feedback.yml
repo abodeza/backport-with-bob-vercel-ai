@@ -1,7 +1,7 @@
-name: Feedback
-description: Share feedback or ideas about AI SDK, the community, or contribution process.
+name: Community Feedback
+description: Share feedback about the AI SDK community, or our contribution process.
 title: 'Feedback: '
-labels: ['feedback']
+labels: ['community-feedback']
 body:
   - type: markdown
     attributes:
