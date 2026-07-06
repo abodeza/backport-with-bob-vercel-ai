@@ -17,6 +17,7 @@ import {
   type Resolvable,
 } from '@ai-sdk/provider-utils';
 import { z } from 'zod/v4';
+import { mapGatewayWarnings } from './map-gateway-warnings';
 import type { GatewayConfig } from './gateway-config';
 import { asGatewayError } from './errors';
 import { parseAuthMethod } from './errors/parse-auth-method';
@@ -183,7 +184,7 @@ export class GatewayVideoModel implements Experimental_VideoModelV3 {
 
       return {
         videos: responseBody.videos,
-        warnings: responseBody.warnings ?? [],
+        warnings: mapGatewayWarnings(responseBody.warnings),
         providerMetadata:
           responseBody.providerMetadata as SharedV3ProviderMetadata,
         response: {
@@ -248,6 +249,11 @@ const gatewayVideoWarningSchema = z.discriminatedUnion('type', [
     type: z.literal('compatibility'),
     feature: z.string(),
     details: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('deprecated'),
+    setting: z.string(),
+    message: z.string(),
   }),
   z.object({
     type: z.literal('other'),
