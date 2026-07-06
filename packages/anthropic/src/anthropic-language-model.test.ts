@@ -8151,9 +8151,66 @@ describe('AnthropicLanguageModel', () => {
       expect(server.calls[0].requestHeaders).toMatchObject({
         'anthropic-user-profile-id': 'uprof_123',
       });
+      expect(server.calls[0].requestHeaders['anthropic-beta']).toContain(
+        'user-profiles-2026-03-24',
+      );
       expect(await server.calls[0].requestBodyJson).not.toHaveProperty(
         'user_profile_id',
       );
+    });
+
+    it('should not send the user profile header or beta when userProfileIdLocation is body', async () => {
+      server.urls['https://api.anthropic.com/v1/messages'].response = {
+        type: 'json-value',
+        body: {
+          id: 'msg_1',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'ok' }],
+          model: 'claude-3-haiku-20240307',
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: { input_tokens: 1, output_tokens: 1 },
+        },
+      };
+
+      const transformFn = vi.fn(
+        (
+          body: Record<string, any>,
+          _betas: Set<string>,
+          userProfileId?: string,
+        ) => ({
+          ...body,
+          ...(userProfileId != null ? { user_profile_id: userProfileId } : {}),
+        }),
+      );
+
+      const { AnthropicLanguageModel } =
+        await import('./anthropic-language-model');
+      const model = new AnthropicLanguageModel('claude-3-haiku-20240307', {
+        provider: 'bedrock.anthropic.messages',
+        baseURL: 'https://api.anthropic.com/v1',
+        headers: {},
+        transformRequestBody: transformFn,
+        userProfileIdLocation: 'body',
+      });
+
+      await model.doGenerate({
+        prompt: TEST_PROMPT,
+        providerOptions: {
+          anthropic: {
+            userProfileId: 'uprof_123',
+          } satisfies AnthropicLanguageModelOptions,
+        },
+      });
+
+      expect(
+        server.calls[0].requestHeaders['anthropic-user-profile-id'],
+      ).toBeUndefined();
+      expect(server.calls[0].requestHeaders['anthropic-beta']).toBeUndefined();
+      expect(await server.calls[0].requestBodyJson).toMatchObject({
+        user_profile_id: 'uprof_123',
+      });
     });
 
     it('should support cache control', async () => {

@@ -67,6 +67,11 @@ import { mapAnthropicStopReason } from './map-anthropic-stop-reason';
 import { sanitizeJsonSchema } from './sanitize-json-schema';
 
 const ANTHROPIC_USER_PROFILE_ID_HEADER = 'anthropic-user-profile-id';
+/**
+ * Anthropic requires this beta on inference requests that carry
+ * `anthropic-user-profile-id`. Not needed on the Bedrock body path.
+ */
+const ANTHROPIC_USER_PROFILES_BETA = 'user-profiles-2026-03-24';
 
 function createCitationSource(
   citation: Citation,
@@ -727,6 +732,13 @@ export class AnthropicLanguageModel implements LanguageModelV4 {
 
     if (anthropicOptions?.fallbacks && anthropicOptions.fallbacks.length > 0) {
       betas.add('server-side-fallback-2026-06-01');
+    }
+
+    if (
+      anthropicOptions?.userProfileId != null &&
+      this.config.userProfileIdLocation !== 'body'
+    ) {
+      betas.add(ANTHROPIC_USER_PROFILES_BETA);
     }
 
     const defaultEagerInputStreaming =

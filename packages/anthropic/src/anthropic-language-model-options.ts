@@ -150,6 +150,9 @@ export const anthropicLanguageModelOptions = z.object({
    * The Anthropic API, Claude Platform on AWS, and Claude on Vertex AI send this
    * as the `anthropic-user-profile-id` request header. Claude in Amazon Bedrock
    * sends it as the `user_profile_id` request body field.
+   *
+   * The required `user-profiles-2026-03-24` beta is added automatically on the
+   * header path.
    */
   userProfileId: z.string().optional(),
 
