@@ -11,8 +11,9 @@ import {
   convertToBase64,
   parseProviderOptions,
   safeParseJSON,
-  validateTypes,
   isNonNullable,
+  secureJsonParse,
+  validateTypes,
   type ToolNameMapping,
 } from '@ai-sdk/provider-utils';
 import {
@@ -767,7 +768,7 @@ export async function convertToAnthropicMessagesPrompt({
                     let errorInfo: { type?: string; errorCode?: string } = {};
                     try {
                       if (typeof output.value === 'string') {
-                        errorInfo = JSON.parse(output.value);
+                        errorInfo = secureJsonParse(output.value);
                       } else if (
                         typeof output.value === 'object' &&
                         output.value !== null

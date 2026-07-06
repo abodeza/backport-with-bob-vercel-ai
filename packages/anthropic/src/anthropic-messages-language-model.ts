@@ -24,6 +24,7 @@ import {
   parseProviderOptions,
   postJsonToApi,
   resolve,
+  secureJsonParse,
   type FetchFunction,
   type InferSchema,
   type ParseResult,
@@ -2078,7 +2079,7 @@ export class AnthropicMessagesLanguageModel implements LanguageModelV3 {
                         contentBlock.input === '' ? '{}' : contentBlock.input;
                       if (contentBlock.providerToolName === 'code_execution') {
                         try {
-                          const parsed = JSON.parse(finalInput);
+                          const parsed = secureJsonParse(finalInput);
                           if (
                             parsed != null &&
                             typeof parsed === 'object' &&

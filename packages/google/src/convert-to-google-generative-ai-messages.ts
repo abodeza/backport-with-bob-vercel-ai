@@ -3,7 +3,7 @@ import {
   type LanguageModelV3Prompt,
   type SharedV3Warning,
 } from '@ai-sdk/provider';
-import { convertToBase64 } from '@ai-sdk/provider-utils';
+import { convertToBase64, secureJsonParse } from '@ai-sdk/provider-utils';
 import type {
   GoogleGenerativeAIContent,
   GoogleGenerativeAIContentPart,
@@ -385,7 +385,7 @@ export function convertToGoogleGenerativeAIMessages(
                         toolType: serverToolType,
                         args:
                           typeof part.input === 'string'
-                            ? JSON.parse(part.input)
+                            ? secureJsonParse(part.input)
                             : part.input,
                         id: serverToolCallId,
                       },

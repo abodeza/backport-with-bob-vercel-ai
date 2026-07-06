@@ -4,7 +4,7 @@ import type {
   LanguageModelV3ToolResultOutput,
   SharedV3Warning,
 } from '@ai-sdk/provider';
-import { convertToBase64 } from '@ai-sdk/provider-utils';
+import { convertToBase64, secureJsonParse } from '@ai-sdk/provider-utils';
 import type {
   GoogleInteractionsContent,
   GoogleInteractionsContentBlock,
@@ -372,7 +372,7 @@ function compactPromptForPreviousInteraction({
 
 function safeParseToolArgs(input: string): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(input);
+    const parsed = secureJsonParse(input);
     if (
       parsed != null &&
       typeof parsed === 'object' &&
