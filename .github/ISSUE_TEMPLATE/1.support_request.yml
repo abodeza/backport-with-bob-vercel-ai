@@ -1,4 +1,4 @@
-name: Support Request
+name: Report a bug or request a feature
 description: Report a bug, feature request, or other support issue with the AI SDK.
 labels: ['support']
 body:
