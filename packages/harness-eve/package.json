@@ -36,7 +36,6 @@
   },
   "dependencies": {
     "@ai-sdk/harness": "workspace:*",
-    "@ai-sdk/provider": "workspace:*",
     "@ai-sdk/provider-utils": "workspace:*",
     "eve": "0.16.2"
   },

@@ -11,11 +11,6 @@ import {
   type HarnessV1StreamPart,
   type HarnessV1ToolSpec,
 } from '@ai-sdk/harness';
-import type {
-  JSONValue,
-  LanguageModelV4FinishReason,
-  LanguageModelV4Usage,
-} from '@ai-sdk/provider';
 import { tool } from '@ai-sdk/provider-utils';
 import {
   Client,
@@ -35,6 +30,17 @@ import { z } from 'zod/v4';
 import { resolveEveClientOptions, type EveClientSettings } from './eve-auth';
 
 export type EveHarnessSettings = EveClientSettings;
+
+type EveToolResultValue = Extract<
+  HarnessV1StreamPart,
+  { type: 'tool-result' }
+>['result'];
+type EveUsage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage'];
+type EveUsageRaw = NonNullable<EveUsage['raw']>;
+type EveFinishReason = Extract<
+  HarnessV1StreamPart,
+  { type: 'finish' }
+>['finishReason'];
 
 const optionalUnknownRecord = z.record(z.string(), z.unknown()).optional();
 
@@ -788,7 +794,7 @@ function translateActionResult({
       type: 'tool-result',
       toolCallId: result.callId,
       toolName: observedToolNames.get(result.callId) ?? wireName,
-      result: (result.output ?? null) as NonNullable<JSONValue>,
+      result: (result.output ?? null) as EveToolResultValue,
       ...(event.data.status === 'failed' || result.isError
         ? { isError: true }
         : {}),
@@ -864,7 +870,7 @@ function mapStepUsage({
   event,
 }: {
   readonly event: StepCompletedStreamEvent;
-}): LanguageModelV4Usage {
+}): EveUsage {
   return {
     inputTokens: {
       total: event.data.usage?.inputTokens,
@@ -882,11 +888,11 @@ function mapStepUsage({
       text: undefined,
       reasoning: undefined,
     },
-    raw: (event.data.usage ?? {}) as Record<string, JSONValue>,
+    raw: (event.data.usage ?? {}) as EveUsageRaw,
   };
 }
 
-function emptyUsage(): LanguageModelV4Usage {
+function emptyUsage(): EveUsage {
   return {
     inputTokens: {
       total: undefined,
@@ -907,9 +913,9 @@ function addUsage({
   left,
   right,
 }: {
-  readonly left: LanguageModelV4Usage;
-  readonly right: LanguageModelV4Usage;
-}): LanguageModelV4Usage {
+  readonly left: EveUsage;
+  readonly right: EveUsage;
+}): EveUsage {
   return {
     inputTokens: {
       total: addOptional(left.inputTokens.total, right.inputTokens.total),
@@ -945,7 +951,7 @@ function mapFinishReason({
   raw,
 }: {
   readonly raw: AssistantStepFinishReason;
-}): LanguageModelV4FinishReason {
+}): EveFinishReason {
   switch (raw) {
     case 'stop':
     case 'length':
