@@ -1870,7 +1870,7 @@ describe('XaiResponsesLanguageModel', () => {
           prompt: TEST_PROMPT,
           tools: [
             {
-              type: 'provider',
+              type: 'provider-defined',
               id: 'xai.web_search',
               name: 'web_search',
               args: {},
