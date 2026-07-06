@@ -5,7 +5,8 @@ body:
         # Please go to Vercel Community
         > [!IMPORTANT]
         > **New Discussions in this repo are no longer actively monitored and will be automatically closed.**
-        > **Please join us at [community.vercel.com/ai-sdk](https://community.vercel.com/ai-sdk).**
+        > **For project, process, or community feedback, please open a Feedback issue.**
+        > **For questions and help, please join us at [community.vercel.com/ai-sdk](https://community.vercel.com/ai-sdk).**
   - type: checkboxes
     attributes:
       label: Acknowledgement
