@@ -14,12 +14,18 @@
 // and streams raw chunks up. The server turns that socket into the
 // `ReadableStream<Uint8Array>` that `experimental_streamTranscribe` consumes,
 // then relays each transcript part back to the browser as it arrives.
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { openai } from '@ai-sdk/openai';
 import { xai } from '@ai-sdk/xai';
 import { experimental_streamTranscribe as streamTranscribe } from 'ai';
 import { page } from './public/page.mjs';
+
+const clientScript = readFileSync(
+  fileURLToPath(new URL('./public/client.mjs', import.meta.url)),
+);
 
 const PORT = Number(process.env.PORT) || 5052;
 
@@ -80,6 +86,12 @@ const server = createServer((req, res) => {
         })),
       ),
     );
+    return;
+  }
+
+  if (req.method === 'GET' && req.url === '/client.mjs') {
+    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+    res.end(clientScript);
     return;
   }
 
