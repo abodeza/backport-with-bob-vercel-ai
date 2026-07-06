@@ -1973,7 +1973,7 @@ describe('convertToModelMessages', () => {
               {
                 "output": {
                   "type": "error-text",
-                  "value": "Tool execution denied.",
+                  "value": "Tool call execution denied.",
                 },
                 "toolCallId": "call-1",
                 "toolName": "weather",
