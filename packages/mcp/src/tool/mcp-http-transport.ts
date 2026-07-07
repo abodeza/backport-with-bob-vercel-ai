@@ -25,6 +25,120 @@ function isMessageEvent(event: string | undefined): boolean {
   return event === undefined || event === 'message';
 }
 
+function getLineEnd(buffer: string): { index: number; length: number } | null {
+  for (let i = 0; i < buffer.length; i++) {
+    const char = buffer[i];
+
+    if (char === '\n') {
+      return { index: i, length: 1 };
+    }
+
+    if (char === '\r') {
+      if (i === buffer.length - 1) {
+        return null;
+      }
+
+      return {
+        index: i,
+        length: buffer[i + 1] === '\n' ? 2 : 1,
+      };
+    }
+  }
+
+  return null;
+}
+
+// Some MCP servers leave streamable HTTP SSE responses open after a single
+// `data: {json-rpc-message}\n` line instead of terminating the frame with a
+// blank line. Normalize those complete JSON-RPC data lines so the SSE parser
+// can dispatch them without waiting for the connection to close.
+function createJsonRpcSseFrameTerminatorStream(): TransformStream<
+  string,
+  string
+> {
+  let buffer = '';
+  let event: string | undefined;
+
+  const resetEvent = () => {
+    event = undefined;
+  };
+
+  const processLine = async ({
+    line,
+    lineEnd,
+    controller,
+  }: {
+    line: string;
+    lineEnd: string;
+    controller: TransformStreamDefaultController<string>;
+  }) => {
+    controller.enqueue(`${line}${lineEnd}`);
+
+    if (line === '') {
+      resetEvent();
+      return;
+    }
+
+    if (line.startsWith(':')) {
+      return;
+    }
+
+    const colonIndex = line.indexOf(':');
+    const field = colonIndex === -1 ? line : line.slice(0, colonIndex);
+    let value = colonIndex === -1 ? '' : line.slice(colonIndex + 1);
+
+    if (value.startsWith(' ')) {
+      value = value.slice(1);
+    }
+
+    switch (field) {
+      case 'event':
+        event = value;
+        break;
+      case 'data':
+        if (isMessageEvent(event)) {
+          try {
+            await parseJSONRPCMessage(value);
+          } catch {
+            return;
+          }
+
+          controller.enqueue(lineEnd === '' ? '\n\n' : '\n');
+          resetEvent();
+        }
+        break;
+    }
+  };
+
+  return new TransformStream<string, string>({
+    async transform(chunk, controller) {
+      buffer += chunk;
+
+      while (true) {
+        const lineEnd = getLineEnd(buffer);
+
+        if (lineEnd == null) {
+          break;
+        }
+
+        await processLine({
+          line: buffer.slice(0, lineEnd.index),
+          lineEnd: buffer.slice(lineEnd.index, lineEnd.index + lineEnd.length),
+          controller,
+        });
+        buffer = buffer.slice(lineEnd.index + lineEnd.length);
+      }
+    },
+    async flush(controller) {
+      if (buffer === '') {
+        return;
+      }
+
+      await processLine({ line: buffer, lineEnd: '', controller });
+    },
+  });
+}
+
 /**
  * HTTP MCP transport implementing the Streamable HTTP style.
  *
@@ -324,6 +438,7 @@ export class HttpMCPTransport implements MCPTransport {
 
           const stream = response.body
             .pipeThrough(new TextDecoderStream())
+            .pipeThrough(createJsonRpcSseFrameTerminatorStream())
             .pipeThrough(new EventSourceParserStream());
           const reader = stream.getReader();
 
@@ -484,6 +599,7 @@ export class HttpMCPTransport implements MCPTransport {
 
       const stream = response.body
         .pipeThrough(new TextDecoderStream())
+        .pipeThrough(createJsonRpcSseFrameTerminatorStream())
         .pipeThrough(new EventSourceParserStream());
       const reader = stream.getReader();
 
