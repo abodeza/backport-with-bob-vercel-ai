@@ -2726,6 +2726,62 @@ describe('streamText', () => {
       );
     });
 
+    it('should reject result promises when abort signal fires while provider stream stays open', async () => {
+      const abortController = new AbortController();
+      let streamController:
+        | ReadableStreamDefaultController<LanguageModelV4StreamPart>
+        | undefined;
+
+      const result = streamText({
+        model: createTestModel({
+          stream: new ReadableStream<LanguageModelV4StreamPart>({
+            start(controller) {
+              streamController = controller;
+              controller.enqueue({ type: 'stream-start', warnings: [] });
+              controller.enqueue({
+                type: 'response-metadata',
+                id: 'id-0',
+                modelId: 'mock-model-id',
+                timestamp: new Date(0),
+              });
+              controller.enqueue({ type: 'text-start', id: '1' });
+              controller.enqueue({
+                type: 'text-delta',
+                id: '1',
+                delta: 'partial',
+              });
+            },
+          }),
+        }),
+        prompt: 'test-input',
+        abortSignal: abortController.signal,
+      });
+
+      setTimeout(() => abortController.abort(), 0);
+
+      const textOutcome = await Promise.race([
+        Promise.resolve(result.text).then(
+          () => ({ status: 'resolved' as const }),
+          error => ({
+            status: 'rejected' as const,
+            message: error instanceof Error ? error.message : String(error),
+          }),
+        ),
+        delay(50).then(() => ({ status: 'pending' as const })),
+      ]);
+
+      try {
+        streamController?.close();
+      } catch {
+        // ignore cleanup errors when the stream was already closed/cancelled
+      }
+
+      expect(textOutcome).toMatchObject({
+        status: 'rejected',
+        message: expect.stringMatching(/aborted/i),
+      });
+    });
+
     it('should reject when provider stream is incomplete on a continuation step', async () => {
       const onError = vi.fn();
       const onStepFinish = vi.fn();
