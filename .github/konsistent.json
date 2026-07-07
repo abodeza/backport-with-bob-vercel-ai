@@ -111,9 +111,7 @@
         },
         {
           "use": "aisdk/provider-video-model-file-must-export-model-class",
-          "excludeFiles": [
-            "packages/gateway/src/gateway-video-model.ts"
-          ]
+          "excludeFiles": ["packages/gateway/src/gateway-video-model.ts"]
         },
         "aisdk/provider-language-model-file-must-import-workflow-serialization",
         "aisdk/provider-model-options-file-must-export-model-options-type",

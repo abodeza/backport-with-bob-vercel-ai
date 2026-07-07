@@ -82,10 +82,7 @@ For more on video generation with the AI SDK see [generateVideo()](/docs/referen
 Generate videos from text prompts:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
@@ -109,10 +106,7 @@ console.log(video.url);
 Generate videos from a first-frame image with an optional text prompt:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
@@ -135,10 +129,7 @@ const { video } = await generateVideo({
 Seedance 1.5 Pro supports generating synchronized audio alongside the video:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
@@ -162,10 +153,7 @@ const { video } = await generateVideo({
 Generate smooth transitions between a starting and ending keyframe image:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
@@ -190,10 +178,7 @@ const { video } = await generateVideo({
 Using the Seedance 1.0 Lite I2V model, you can provide multiple reference images (1-4) that the model uses to faithfully reproduce object shapes, colors, and textures:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
@@ -220,10 +205,7 @@ const { video } = await generateVideo({
 Seedance 2.0 supports reference videos that guide the style, motion, or composition of the generated video:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
@@ -246,10 +228,7 @@ const { video } = await generateVideo({
 Seedance 2.0 supports reference audio that is used as background music or sound for the generated video:
 
 ```ts
-import {
-  byteDance,
-  type ByteDanceVideoModelOptions,
-} from '@ai-sdk/bytedance';
+import { byteDance, type ByteDanceVideoModelOptions } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
 const { video } = await generateVideo({
