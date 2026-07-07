@@ -397,6 +397,33 @@ describe('doGenerate', () => {
     });
   });
 
+  it('should forward presencePenalty and frequencyPenalty without unsupported warnings', async () => {
+    prepareJsonResponse({ content: '' });
+
+    const result = await model.doGenerate({
+      prompt: TEST_PROMPT,
+      presencePenalty: 0.1,
+      frequencyPenalty: 0.2,
+    });
+
+    expect(result.warnings).not.toContainEqual(
+      expect.objectContaining({
+        type: 'unsupported-setting',
+        setting: 'presencePenalty',
+      }),
+    );
+    expect(result.warnings).not.toContainEqual(
+      expect.objectContaining({
+        type: 'unsupported-setting',
+        setting: 'frequencyPenalty',
+      }),
+    );
+    expect(await server.calls[0].requestBodyJson).toMatchObject({
+      presence_penalty: 0.1,
+      frequency_penalty: 0.2,
+    });
+  });
+
   it('should pass tools and toolChoice', async () => {
     prepareJsonResponse({ content: '' });
 

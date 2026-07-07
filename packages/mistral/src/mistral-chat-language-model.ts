@@ -89,20 +89,6 @@ export class MistralChatLanguageModel implements LanguageModelV2 {
       });
     }
 
-    if (frequencyPenalty != null) {
-      warnings.push({
-        type: 'unsupported-setting',
-        setting: 'frequencyPenalty',
-      });
-    }
-
-    if (presencePenalty != null) {
-      warnings.push({
-        type: 'unsupported-setting',
-        setting: 'presencePenalty',
-      });
-    }
-
     if (stopSequences != null) {
       warnings.push({
         type: 'unsupported-setting',
@@ -133,6 +119,10 @@ export class MistralChatLanguageModel implements LanguageModelV2 {
       max_tokens: maxOutputTokens,
       temperature,
       top_p: topP,
+      ...(frequencyPenalty != null
+        ? { frequency_penalty: frequencyPenalty }
+        : {}),
+      ...(presencePenalty != null ? { presence_penalty: presencePenalty } : {}),
       random_seed: seed,
 
       // response format:
