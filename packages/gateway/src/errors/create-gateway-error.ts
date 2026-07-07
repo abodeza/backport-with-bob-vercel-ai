@@ -9,7 +9,10 @@ import {
 } from './gateway-model-not-found-error';
 import { GatewayInternalServerError } from './gateway-internal-server-error';
 import { GatewayFailedDependencyError } from './gateway-failed-dependency-error';
-import { GatewayForbiddenError } from './gateway-forbidden-error';
+import {
+  GatewayForbiddenError,
+  forbiddenParamSchema,
+} from './gateway-forbidden-error';
 import { GatewayResponseError } from './gateway-response-error';
 import {
   lazySchema,
@@ -110,14 +113,20 @@ export async function createGatewayErrorFromResponse({
         cause,
         generationId,
       });
-    case 'forbidden':
+    case 'forbidden': {
+      const ruleResult = await safeValidateTypes({
+        value: validatedResponse.error.param,
+        schema: forbiddenParamSchema,
+      });
+
       return new GatewayForbiddenError({
         message,
         statusCode,
         cause,
         generationId,
-        ruleId: validatedResponse.error.ruleId ?? undefined,
+        ruleId: ruleResult.success ? ruleResult.value.ruleId : undefined,
       });
+    }
     default:
       return new GatewayInternalServerError({
         message,
@@ -136,7 +145,6 @@ const gatewayErrorResponseSchema = lazySchema(() =>
         type: z.string().nullish(),
         param: z.unknown().nullish(),
         code: z.union([z.string(), z.number()]).nullish(),
-        ruleId: z.string().nullish(),
       }),
       generationId: z.string().nullish(),
     }),

@@ -69,12 +69,12 @@ describe('Valid error responses', () => {
     expect((error as GatewayForbiddenError).ruleId).toBeUndefined();
   });
 
-  it('exposes the ruleId on GatewayForbiddenError when present', async () => {
+  it('exposes the ruleId on GatewayForbiddenError when present in param', async () => {
     const response: GatewayErrorResponse = {
       error: {
         message: 'Request denied by a routing rule.',
         type: 'forbidden',
-        ruleId: 'rule_abc123',
+        param: { ruleId: 'rule_abc123' },
       },
     };
 
@@ -85,6 +85,24 @@ describe('Valid error responses', () => {
 
     expect(error).toBeInstanceOf(GatewayForbiddenError);
     expect((error as GatewayForbiddenError).ruleId).toBe('rule_abc123');
+  });
+
+  it('leaves ruleId undefined when the forbidden param has an unexpected shape', async () => {
+    const response: GatewayErrorResponse = {
+      error: {
+        message: 'Request denied by a routing rule.',
+        type: 'forbidden',
+        param: 'model',
+      },
+    };
+
+    const error = await createGatewayErrorFromResponse({
+      response,
+      statusCode: 403,
+    });
+
+    expect(error).toBeInstanceOf(GatewayForbiddenError);
+    expect((error as GatewayForbiddenError).ruleId).toBeUndefined();
   });
 
   it('should create GatewayRateLimitError for rate_limit_exceeded type', async () => {

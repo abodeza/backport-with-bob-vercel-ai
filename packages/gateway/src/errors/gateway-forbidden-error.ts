@@ -1,8 +1,18 @@
+import { z } from 'zod/v4';
 import { GatewayError } from './gateway-error';
+import { lazySchema, zodSchema } from '@ai-sdk/provider-utils';
 
 const name = 'GatewayForbiddenError';
 const marker = `vercel.ai.gateway.error.${name}`;
 const symbol = Symbol.for(marker);
+
+export const forbiddenParamSchema = lazySchema(() =>
+  zodSchema(
+    z.object({
+      ruleId: z.string(),
+    }),
+  ),
+);
 
 /**
  * Forbidden - the request was rejected by policy (e.g. a routing rule),
