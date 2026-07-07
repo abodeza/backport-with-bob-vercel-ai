@@ -247,7 +247,8 @@ export async function generateText<
   activeTools,
   toolOrder,
   prepareStep,
-  experimental_repairToolCall: repairToolCall,
+  experimental_repairToolCall,
+  repairToolCall = experimental_repairToolCall,
   experimental_refineToolInput: refineToolInput,
   experimental_download: download,
   runtimeContext = {} as RUNTIME_CONTEXT,
@@ -376,6 +377,13 @@ export async function generateText<
 
     /**
      * A function that attempts to repair a tool call that failed to parse.
+     */
+    repairToolCall?: ToolCallRepairFunction<NoInfer<TOOLS>>;
+
+    /**
+     * A function that attempts to repair a tool call that failed to parse.
+     *
+     * @deprecated Use `repairToolCall` instead.
      */
     experimental_repairToolCall?: ToolCallRepairFunction<NoInfer<TOOLS>>;
 
