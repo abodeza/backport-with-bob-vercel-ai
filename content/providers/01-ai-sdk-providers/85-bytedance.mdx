@@ -84,7 +84,7 @@ Generate videos from text prompts:
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -97,7 +97,7 @@ const { video } = await generateVideo({
   providerOptions: {
     bytedance: {
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 
@@ -111,7 +111,7 @@ Generate videos from a first-frame image with an optional text prompt:
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -125,7 +125,7 @@ const { video } = await generateVideo({
   providerOptions: {
     bytedance: {
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 ```
@@ -137,7 +137,7 @@ Seedance 1.5 Pro supports generating synchronized audio alongside the video:
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -152,7 +152,7 @@ const { video } = await generateVideo({
     bytedance: {
       generateAudio: true,
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 ```
@@ -164,7 +164,7 @@ Generate smooth transitions between a starting and ending keyframe image:
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -180,7 +180,7 @@ const { video } = await generateVideo({
       lastFrameImage: 'https://example.com/last-frame.jpg',
       generateAudio: true,
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 ```
@@ -192,7 +192,7 @@ Using the Seedance 1.0 Lite I2V model, you can provide multiple reference images
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -210,7 +210,7 @@ const { video } = await generateVideo({
         'https://example.com/lawn.png',
       ],
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 ```
@@ -222,7 +222,7 @@ Seedance 2.0 supports reference videos that guide the style, motion, or composit
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -236,7 +236,7 @@ const { video } = await generateVideo({
     bytedance: {
       referenceVideos: ['https://example.com/reference-video.mp4'],
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 ```
@@ -248,7 +248,7 @@ Seedance 2.0 supports reference audio that is used as background music or sound 
 ```ts
 import {
   byteDance,
-  type ByteDanceVideoProviderOptions,
+  type ByteDanceVideoModelOptions,
 } from '@ai-sdk/bytedance';
 import { experimental_generateVideo as generateVideo } from 'ai';
 
@@ -262,14 +262,15 @@ const { video } = await generateVideo({
       referenceAudio: ['https://example.com/background-music.mp3'],
       generateAudio: true,
       watermark: false,
-    } satisfies ByteDanceVideoProviderOptions,
+    } satisfies ByteDanceVideoModelOptions,
   },
 });
 ```
 
-### Video Provider Options
+### Video Model Options
 
-The following provider options are available via `providerOptions.bytedance`:
+The following options are available via `providerOptions.bytedance`. You can
+type them with `ByteDanceVideoModelOptions`.
 
 #### Generation Options
 
@@ -279,7 +280,8 @@ The following provider options are available via `providerOptions.bytedance`:
 
 - **generateAudio** _boolean_
 
-  Whether to generate synchronized audio for the video. Only supported by Seedance 1.5 Pro.
+  Whether to generate synchronized audio for the video. Supported by Seedance
+  1.5 Pro and Seedance 2.0.
 
 - **cameraFixed** _boolean_
 
@@ -305,7 +307,10 @@ The following provider options are available via `providerOptions.bytedance`:
 
 - **referenceImages** _string[]_
 
-  Array of reference image URLs (1-4 images) for multi-reference image-to-video generation. The model extracts key features from each image and reproduces them in the video. Use `[Image 1]`, `[Image 2]`, etc. in your prompt to reference specific images. Supported by Seedance 1.0 Lite I2V.
+  Array of reference image URLs for multi-reference image-to-video generation.
+  The model extracts key features from each image and reproduces them in the
+  video. Use `[Image 1]`, `[Image 2]`, etc. in your prompt to reference
+  specific images.
 
 #### Media Reference Options
 
