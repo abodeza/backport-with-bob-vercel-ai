@@ -159,6 +159,85 @@ describe('HttpMCPTransport', () => {
     await client.close();
   });
 
+  it('should initialize MCP client from an SSE response without a frame terminator', async () => {
+    const controller = new TestResponseController();
+
+    server.urls['http://localhost:4000/stream'].response = ({ callNumber }) => {
+      switch (callNumber) {
+        case 0:
+          return { type: 'error', status: 405 };
+        case 1:
+          return {
+            type: 'controlled-stream',
+            controller,
+            headers: { 'content-type': 'text/event-stream' },
+          };
+        case 2:
+          return { type: 'empty', status: 202 };
+        default:
+          return { type: 'empty', status: 200 };
+      }
+    };
+
+    const clientPromise = createMCPClient({
+      transport: {
+        type: 'http',
+        url: 'http://localhost:4000/stream',
+      },
+    });
+    void clientPromise.catch(() => undefined);
+
+    await vi.waitFor(() => {
+      expect(server.calls[1]?.requestMethod).toBe('POST');
+    });
+
+    await controller.write(
+      `data: ${JSON.stringify({
+        jsonrpc: '2.0',
+        id: 0,
+        result: {
+          protocolVersion: LATEST_PROTOCOL_VERSION,
+          capabilities: {},
+          serverInfo: { name: 'test-server', version: '1.0.0' },
+        },
+      })}\n`,
+    );
+
+    const resultPromise = Promise.race([
+      clientPromise,
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              'createMCPClient timed out waiting for an unterminated SSE frame',
+            ),
+          );
+        }, 1000);
+      }),
+    ]);
+    const observedResultPromise = resultPromise.then(
+      client => ({ type: 'resolved' as const, client }),
+      error => ({ type: 'rejected' as const, error }),
+    );
+
+    try {
+      await vi.advanceTimersByTimeAsync(1000);
+      const result = await observedResultPromise;
+
+      if (result.type === 'rejected') {
+        throw result.error;
+      }
+
+      expect(result.client.serverInfo).toEqual({
+        name: 'test-server',
+        version: '1.0.0',
+      });
+      await result.client.close();
+    } finally {
+      await controller.error(new DOMException('Aborted', 'AbortError'));
+    }
+  });
+
   it('should (re)open inbound SSE after 202 Accepted', async () => {
     const controller = new TestResponseController();
 
