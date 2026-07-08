@@ -221,12 +221,14 @@ export class GoogleLanguageModel implements LanguageModelV4 {
       : googleOptions?.serviceTier;
 
     const isGemmaModel = this.modelId.toLowerCase().startsWith('gemma-');
-    const isGemini3Model = /^gemini-3[.-]/.test(this.modelId);
-    const supportsFunctionResponseParts = isGemini3Model;
+    const isGemini3 = isGemini3Model(this.modelId);
+    const supportsFunctionResponseParts = modelSupportsFunctionResponseParts(
+      this.modelId,
+    );
 
     const { contents, systemInstruction } = convertToGoogleMessages(prompt, {
       isGemmaModel,
-      isGemini3Model,
+      isGemini3Model: isGemini3,
       onWarning: warning => warnings.push(warning),
       providerOptionsNames,
       supportsFunctionResponseParts,
@@ -1087,7 +1089,22 @@ export class GoogleLanguageModel implements LanguageModelV4 {
 }
 
 function isGemini3Model(modelId: string): boolean {
-  return /gemini-3[\.\-]/i.test(modelId) || /gemini-3$/i.test(modelId);
+  const normalizedModelId = modelId.toLowerCase();
+
+  return (
+    /(^|\/)gemini-3[.-]/.test(normalizedModelId) ||
+    /(^|\/)gemini-3$/.test(normalizedModelId)
+  );
+}
+
+function modelSupportsFunctionResponseParts(modelId: string): boolean {
+  const normalizedModelId = modelId.toLowerCase();
+
+  return (
+    isGemini3Model(normalizedModelId) ||
+    /(^|\/)gemini-(?:pro|flash|flash-lite)-latest$/.test(normalizedModelId) ||
+    /(^|\/)gemini-2\.5-(?:pro|flash|flash-lite)$/.test(normalizedModelId)
+  );
 }
 
 function getMaxOutputTokensForGemini25Model(): number {

@@ -66,7 +66,7 @@ function convertUrlToolResultPart(
 /*
  * Appends tool result content parts to the message using the functionResponse
  * format with support for multimodal parts (e.g. inline images/files alongside
- * text). This format is supported by Gemini 3+ models.
+ * text). This format is supported by models with functionResponse parts.
  */
 function appendToolResultParts(
   parts: GoogleContentPart[],
@@ -135,8 +135,8 @@ function appendToolResultParts(
 }
 
 /*
- * Appends tool result content parts using a legacy format for pre-Gemini 3
- * models that do not support multimodal parts within functionResponse. Instead,
+ * Appends tool result content parts using a legacy format for models that do
+ * not support multimodal parts within functionResponse. Instead,
  * non-text content like images is sent as separate top-level inlineData parts.
  */
 function appendLegacyToolResultParts(

@@ -1034,18 +1034,25 @@ describe('doGenerate', () => {
   });
 
   it('should send PDF tool result file data as functionResponse parts for gemini-flash-lite-latest', async () => {
-    const liveFixture = JSON.parse(
-      fs.readFileSync(
-        'src/__fixtures__/google-issue-16072-file-tool-result-live.json',
-        'utf8',
-      ),
-    ) as {
-      calls: Array<{ responseBody: Record<string, unknown> }>;
-    };
-
     server.urls[TEST_URL_GEMINI_FLASH_LITE_LATEST].response = {
       type: 'json-value',
-      body: liveFixture.calls[1].responseBody,
+      body: {
+        candidates: [
+          {
+            content: {
+              parts: [{ text: 'Metadata was returned.' }],
+              role: 'model',
+            },
+            finishReason: 'STOP',
+            index: 0,
+          },
+        ],
+        usageMetadata: {
+          promptTokenCount: 10,
+          candidatesTokenCount: 3,
+          totalTokenCount: 13,
+        },
+      },
     };
 
     const geminiFlashLiteLatest = provider.languageModel(
