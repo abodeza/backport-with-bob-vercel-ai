@@ -122,7 +122,7 @@ async function refineParsedToolCallInput<TOOLS extends ToolSet>({
   toolCall: TypedToolCall<TOOLS>;
   refineToolInput: ToolInputRefinement<TOOLS> | undefined;
 }): Promise<TypedToolCall<TOOLS>> {
-  const refine = refineToolInput?.[toolCall.toolName];
+  const refine = getOwn(refineToolInput, toolCall.toolName);
 
   if (refine == null) {
     return toolCall;
