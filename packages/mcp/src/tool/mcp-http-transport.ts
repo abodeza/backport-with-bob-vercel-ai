@@ -67,10 +67,12 @@ function createJsonRpcSseFrameTerminatorStream(): TransformStream<
     line,
     lineEnd,
     controller,
+    canTerminateFrame,
   }: {
     line: string;
     lineEnd: string;
     controller: TransformStreamDefaultController<string>;
+    canTerminateFrame: boolean;
   }) => {
     controller.enqueue(`${line}${lineEnd}`);
 
@@ -96,14 +98,18 @@ function createJsonRpcSseFrameTerminatorStream(): TransformStream<
         event = value;
         break;
       case 'data':
-        if (isMessageEvent(event)) {
+        // Only synthesize a frame terminator when this complete JSON-RPC
+        // `data:` line is the last line currently available. If another SSE
+        // field or the real blank-line terminator is already buffered, let the
+        // EventSource parser preserve the original frame boundaries.
+        if (canTerminateFrame && isMessageEvent(event)) {
           try {
             await parseJSONRPCMessage(value);
           } catch {
             return;
           }
 
-          controller.enqueue(lineEnd === '' ? '\n\n' : '\n');
+          controller.enqueue(lineEnd === '' ? '\n\n' : lineEnd);
           resetEvent();
         }
         break;
@@ -121,12 +127,15 @@ function createJsonRpcSseFrameTerminatorStream(): TransformStream<
           break;
         }
 
+        const lineEndOffset = lineEnd.index + lineEnd.length;
+
         await processLine({
           line: buffer.slice(0, lineEnd.index),
           lineEnd: buffer.slice(lineEnd.index, lineEnd.index + lineEnd.length),
           controller,
+          canTerminateFrame: lineEndOffset === buffer.length,
         });
-        buffer = buffer.slice(lineEnd.index + lineEnd.length);
+        buffer = buffer.slice(lineEndOffset);
       }
     },
     async flush(controller) {
@@ -134,7 +143,12 @@ function createJsonRpcSseFrameTerminatorStream(): TransformStream<
         return;
       }
 
-      await processLine({ line: buffer, lineEnd: '', controller });
+      await processLine({
+        line: buffer,
+        lineEnd: '',
+        controller,
+        canTerminateFrame: true,
+      });
     },
   });
 }
