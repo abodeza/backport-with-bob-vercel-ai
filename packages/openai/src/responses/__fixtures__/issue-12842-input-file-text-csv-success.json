@@ -1,0 +1,41 @@
+{
+  "recordedAt": "2026-07-08T09:25:25.000Z",
+  "request": {
+    "model": "gpt-4.1-nano",
+    "input": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Read the CSV file and reply with exactly the names, separated by commas."
+          },
+          {
+            "type": "input_file",
+            "filename": "names.csv",
+            "file_data": "data:text/csv;base64,bmFtZSxyb2xlCkFkYSxlbmdpbmVlcgpHcmFjZSxzY2llbnRpc3QK"
+          }
+        ]
+      }
+    ]
+  },
+  "response": {
+    "id": "resp_00f8b0378a5bb463006a4e1782f10081a291debf8a3a6d45b5",
+    "timestamp": "2026-07-08T09:25:24.000Z",
+    "modelId": "gpt-4.1-nano-2025-04-14",
+    "text": "Ada,Grace",
+    "usage": {
+      "inputTokens": 67,
+      "inputTokenDetails": {
+        "noCacheTokens": 67,
+        "cacheReadTokens": 0
+      },
+      "outputTokens": 4,
+      "outputTokenDetails": {
+        "textTokens": 4,
+        "reasoningTokens": 0
+      },
+      "totalTokens": 71
+    }
+  }
+}
