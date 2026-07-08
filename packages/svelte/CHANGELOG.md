@@ -1,5 +1,11 @@
 # @ai-sdk/svelte
 
+## 5.0.18
+
+### Patch Changes
+
+- 0363440: Promote `useObject` (React, Vue) and `StructuredObject` (Svelte) to stable exports, with deprecated experimental aliases for backwards compatibility.
+
 ## 5.0.17
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @ai-sdk/react
 
+## 4.0.19
+
+### Patch Changes
+
+- 0363440: Promote `useObject` (React, Vue) and `StructuredObject` (Svelte) to stable exports, with deprecated experimental aliases for backwards compatibility.
+
 ## 4.0.18
 
 ### Patch Changes
