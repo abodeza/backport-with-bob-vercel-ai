@@ -370,6 +370,9 @@ describe('doGenerate', () => {
   const TEST_URL_GEMINI_2_5_FLASH_LITE =
     'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
 
+  const TEST_URL_GEMINI_FLASH_LITE_LATEST =
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent';
+
   const server = createTestServer({
     [TEST_URL_GEMINI_PRO]: {},
     [TEST_URL_GEMINI_2_0_PRO]: {},
@@ -381,6 +384,7 @@ describe('doGenerate', () => {
     [TEST_URL_GEMINI_2_5_PRO]: {},
     [TEST_URL_GEMINI_2_5_FLASH_LITE]: {},
     [TEST_URL_GEMINI_2_5_FLASH]: {},
+    [TEST_URL_GEMINI_FLASH_LITE_LATEST]: {},
   });
 
   function prepareJsonFixtureResponse(
@@ -1027,6 +1031,107 @@ describe('doGenerate', () => {
         ],
       }
     `);
+  });
+
+  it('should send PDF tool result file data as functionResponse parts for gemini-flash-lite-latest', async () => {
+    const liveFixture = JSON.parse(
+      fs.readFileSync(
+        'src/__fixtures__/google-issue-16072-file-tool-result-live.json',
+        'utf8',
+      ),
+    ) as {
+      calls: Array<{ responseBody: Record<string, unknown> }>;
+    };
+
+    server.urls[TEST_URL_GEMINI_FLASH_LITE_LATEST].response = {
+      type: 'json-value',
+      body: liveFixture.calls[1].responseBody,
+    };
+
+    const geminiFlashLiteLatest = provider.languageModel(
+      'gemini-flash-lite-latest',
+    );
+
+    await geminiFlashLiteLatest.doGenerate({
+      prompt: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Call catalogSearch once, then say whether metadata was returned. Do not inspect the PDF.',
+            },
+          ],
+        },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool-call',
+              toolCallId: 'test-call-id',
+              toolName: 'catalogSearch',
+              input: {},
+              providerOptions: {
+                google: { thoughtSignature: 'test-thought-signature' },
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: 'test-call-id',
+              toolName: 'catalogSearch',
+              output: {
+                type: 'content',
+                value: [
+                  {
+                    type: 'text',
+                    text: 'metadata',
+                  },
+                  {
+                    type: 'file',
+                    data: {
+                      type: 'data',
+                      data: 'JVBERi0xLjQKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0YK',
+                    },
+                    mediaType: 'application/pdf',
+                    filename: 'catalog.pdf',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const requestBody = (await server.calls[0].requestBodyJson) as {
+      contents: Array<{ parts: Array<unknown> }>;
+    };
+
+    expect(requestBody.contents.at(-1)?.parts).toEqual([
+      {
+        functionResponse: {
+          id: 'test-call-id',
+          name: 'catalogSearch',
+          response: {
+            name: 'catalogSearch',
+            content: 'metadata',
+          },
+          parts: [
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: 'JVBERi0xLjQKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0YK',
+              },
+            },
+          ],
+        },
+      },
+    ]);
   });
 
   it('should set response mime type with responseFormat', async () => {

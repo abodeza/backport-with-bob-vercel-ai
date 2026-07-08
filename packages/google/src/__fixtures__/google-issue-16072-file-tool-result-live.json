@@ -1,0 +1,174 @@
+{
+  "resultText": "Metadata was returned.",
+  "calls": [
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent",
+      "requestBody": {
+        "generationConfig": {
+          "maxOutputTokens": 64
+        },
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Call catalogSearch once, then say whether metadata was returned. Do not inspect the PDF."
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "catalogSearch",
+                "description": "Returns catalog metadata and a PDF page."
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "ANY",
+            "allowedFunctionNames": [
+              "catalogSearch"
+            ]
+          }
+        }
+      },
+      "responseStatus": 200,
+      "responseBody": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "functionCall": {
+                    "name": "catalogSearch",
+                    "args": {},
+                    "id": "PPik6Btt"
+                  },
+                  "thoughtSignature": "EjQKMgERTTIPN10h3l8gol5CPOBIpGm8SNd11nFIygg8WyB4t9Ju+M8bngWZHD6D3AqRkw+0"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0,
+            "finishMessage": "Model generated function call(s)."
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 39,
+          "candidatesTokenCount": 9,
+          "totalTokenCount": 48,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 39
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.1-flash-lite",
+        "responseId": "APhNavbZKaqfkdUP-aO76Q0"
+      }
+    },
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent",
+      "requestBody": {
+        "generationConfig": {
+          "maxOutputTokens": 64
+        },
+        "contents": [
+          {
+            "role": "user",
+            "parts": [
+              {
+                "text": "Call catalogSearch once, then say whether metadata was returned. Do not inspect the PDF."
+              }
+            ]
+          },
+          {
+            "role": "model",
+            "parts": [
+              {
+                "functionCall": {
+                  "id": "PPik6Btt",
+                  "name": "catalogSearch",
+                  "args": {}
+                },
+                "thoughtSignature": "EjQKMgERTTIPN10h3l8gol5CPOBIpGm8SNd11nFIygg8WyB4t9Ju+M8bngWZHD6D3AqRkw+0"
+              }
+            ]
+          },
+          {
+            "role": "user",
+            "parts": [
+              {
+                "functionResponse": {
+                  "id": "PPik6Btt",
+                  "name": "catalogSearch",
+                  "response": {
+                    "name": "catalogSearch",
+                    "content": "metadata"
+                  }
+                }
+              },
+              {
+                "text": "{\"type\":\"file\",\"mediaType\":\"application/pdf\",\"filename\":\"catalog.pdf\",\"data\":{\"type\":\"data\",\"data\":\"JVBERi0xLjQKMSAwIG9iago8PD4+CmVuZG9iagp0cmFpbGVyCjw8Pj4KJSVFT0YK\"}}"
+              }
+            ]
+          }
+        ],
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "catalogSearch",
+                "description": "Returns catalog metadata and a PDF page."
+              }
+            ]
+          }
+        ],
+        "toolConfig": {
+          "functionCallingConfig": {
+            "mode": "NONE"
+          }
+        }
+      },
+      "responseStatus": 200,
+      "responseBody": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "Metadata was returned.",
+                  "thoughtSignature": "EjQKMgERTTIPnYA/rAU8j6y994pGpznKtVe1nA93qKGKgItxuFgNMDlzKPH7kA7fEp8g9R+3"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 137,
+          "candidatesTokenCount": 4,
+          "totalTokenCount": 141,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 137
+            }
+          ],
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-3.1-flash-lite",
+        "responseId": "AfhNataCGOHxnsEPm92Q4AY"
+      }
+    }
+  ]
+}
