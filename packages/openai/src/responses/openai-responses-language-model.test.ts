@@ -241,6 +241,72 @@ describe('OpenAIResponsesLanguageModel', () => {
   }
 
   describe('doGenerate', () => {
+    it('reproduction #12842: should send OpenAI-supported CSV files as input_file by default', async () => {
+      prepareJsonFixtureResponse('openai-input-file-csv');
+
+      const result = await createModel('gpt-4.1-nano').doGenerate({
+        prompt: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'What names appear in the CSV? Reply with just the names separated by comma.',
+              },
+              {
+                type: 'file',
+                filename: 'names.csv',
+                mediaType: 'text/csv',
+                data: {
+                  type: 'data',
+                  data: Buffer.from(
+                    'name,role\nAda,engineer\nGrace,scientist\n',
+                  ),
+                },
+              },
+            ],
+          },
+        ],
+        maxOutputTokens: 40,
+        providerOptions: {
+          openai: {
+            store: false,
+          } satisfies OpenAILanguageModelResponsesOptions,
+        },
+      });
+
+      expect(result.content).toEqual([
+        {
+          type: 'text',
+          text: 'Ada,Grace',
+          providerMetadata: {
+            openai: {
+              itemId: 'msg_0ea91f8f0111eb2a016a4df990ac4c81a0844864aa1e105462',
+            },
+          },
+        },
+      ]);
+      expect(await server.calls[0].requestBodyJson).toMatchObject({
+        input: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: 'What names appear in the CSV? Reply with just the names separated by comma.',
+              },
+              {
+                type: 'input_file',
+                filename: 'names.csv',
+                file_data:
+                  'data:text/csv;base64,bmFtZSxyb2xlCkFkYSxlbmdpbmVlcgpHcmFjZSxzY2llbnRpc3QK',
+              },
+            ],
+          },
+        ],
+      });
+    });
+
     describe('basic text response', () => {
       beforeEach(() => {
         server.urls['https://api.openai.com/v1/responses'].response = {
