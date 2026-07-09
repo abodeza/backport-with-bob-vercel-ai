@@ -23,7 +23,20 @@ jobs:
 
     steps:
       # -----------------------------------------------------------------------
-      # Step 0 — Resolve PR context from the backport branch name
+      # Step 0 — Acknowledge trigger
+      # -----------------------------------------------------------------------
+      - name: Acknowledge trigger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body "🤖 **Bob is on it!** Fetching logs and analysing the failure — I'll post results here shortly."
+
+      # -----------------------------------------------------------------------
+      # Step 1 — Resolve PR context from the backport branch name
       # -----------------------------------------------------------------------
       - name: Resolve PR context
         env:
@@ -42,7 +55,7 @@ jobs:
           echo "RELEASE_BRANCH=$RELEASE_BRANCH"         >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
-      # Step 1 — Find the most recent failed run ID for backport.yml
+      # Step 2 — Find the most recent failed run ID for backport.yml
       # -----------------------------------------------------------------------
       - name: Find failed run ID
         env:
@@ -60,7 +73,7 @@ jobs:
           echo "RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
-      # Step 2 — Fetch failed step logs
+      # Step 3 — Fetch failed step logs
       # -----------------------------------------------------------------------
       - name: Fetch failed step logs
         env:
@@ -72,7 +85,7 @@ jobs:
           echo "FAILURE_LOGS_FILE=$RUNNER_TEMP/failure_logs.txt" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
-      # Step 3 — Fetch backport PR diff
+      # Step 4 — Fetch backport PR diff
       # -----------------------------------------------------------------------
       - name: Fetch PR diff
         env:
@@ -85,7 +98,7 @@ jobs:
           echo "PR_DIFF_FILE=$RUNNER_TEMP/pr_diff.patch" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
-      # Step 4 — Checkout the backport branch
+      # Step 5 — Checkout the backport branch
       # -----------------------------------------------------------------------
       - name: Checkout backport branch
         uses: actions/checkout@v4
@@ -94,7 +107,7 @@ jobs:
           fetch-depth: 0
 
       # -----------------------------------------------------------------------
-      # Step 5 — Setup Node.js
+      # Step 6 — Setup Node.js
       # -----------------------------------------------------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -102,19 +115,19 @@ jobs:
           node-version: '22'
 
       # -----------------------------------------------------------------------
-      # Step 6 — Install prompt assembler dependencies
+      # Step 7 — Install prompt assembler dependencies
       # -----------------------------------------------------------------------
       - name: Install prompt assembler dependencies
         run: cd .github/workflows/actions/bob-backport && npm install
 
       # -----------------------------------------------------------------------
-      # Step 7 — Install Bob Shell
+      # Step 8 — Install Bob Shell
       # -----------------------------------------------------------------------
       - name: Install Bob Shell
         run: curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm
 
       # -----------------------------------------------------------------------
-      # Step 8 — Run Bob Shell
+      # Step 9 — Run Bob Shell
       # -----------------------------------------------------------------------
       - name: Run Bob Shell
         env:
@@ -132,7 +145,7 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/bob_output.txt"
 
       # -----------------------------------------------------------------------
-      # Step 9 — Extract analysis from Bob's stdout
+      # Step 10 — Extract analysis from Bob's stdout
       # -----------------------------------------------------------------------
       - name: Extract Bob's analysis
         run: |
@@ -178,7 +191,7 @@ jobs:
           echo "ANALYSIS_FILE=$ANALYSIS_OUT" >> "$GITHUB_ENV"
 
       # -----------------------------------------------------------------------
-      # Step 10 — Post the comment on the backport PR
+      # Step 11 — Post the comment on the backport PR
       # -----------------------------------------------------------------------
       - name: Post analysis comment
         env:
@@ -189,3 +202,18 @@ jobs:
           gh pr comment "$PR_NUMBER" \
             --repo "$REPO" \
             --body-file "$RUNNER_TEMP/analysis.md"
+
+      # -----------------------------------------------------------------------
+      # Step 12 — Post failure notice if any earlier step failed
+      # -----------------------------------------------------------------------
+      - name: Post failure notice
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body "⚠️ **Bob encountered an issue** and could not complete the analysis. [View the workflow run]($WORKFLOW_RUN_URL) for details."
