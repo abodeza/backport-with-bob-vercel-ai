@@ -134,7 +134,7 @@ jobs:
               if not non_ok and job.get("conclusion") != "failure":
                   continue  # job fully succeeded
 
-              job_id   = job["databaseId"]
+              job_id   = job["id"]
               job_name = job["name"]
 
               # ── 3. Fetch this job's full log once ────────────────────────────
