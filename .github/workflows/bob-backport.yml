@@ -1,0 +1,342 @@
+name: Bob Backport Healer
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  heal:
+    name: Heal failing backport
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '/bob-backport') &&
+      (github.event.comment.author_association == 'OWNER' ||
+       github.event.comment.author_association == 'MEMBER')
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 0 — Acknowledge trigger
+      # -----------------------------------------------------------------------
+      - name: Acknowledge trigger
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body "🤖 **Bob is on it!** Fetching logs and analysing the failure — I'll post results here shortly."
+
+      # -----------------------------------------------------------------------
+      # Step 1 — Resolve PR context from the backport branch name
+      # -----------------------------------------------------------------------
+      - name: Resolve PR context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          PR_JSON=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName,headRefOid)
+          BACKPORT_BRANCH=$(echo "$PR_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['headRefName'])")
+
+          ORIGINAL_PR_NUMBER=$(echo "$BACKPORT_BRANCH" | sed 's/backport-pr-\([0-9]*\)-.*/\1/')
+          RELEASE_BRANCH=$(echo "$BACKPORT_BRANCH" | sed 's/backport-pr-[0-9]*-to-//')
+
+          echo "BACKPORT_BRANCH=$BACKPORT_BRANCH"       >> "$GITHUB_ENV"
+          echo "ORIGINAL_PR_NUMBER=$ORIGINAL_PR_NUMBER" >> "$GITHUB_ENV"
+          echo "RELEASE_BRANCH=$RELEASE_BRANCH"         >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------------
+      # Step 2 — Find the CI run ID triggered by the backport branch HEAD SHA
+      # -----------------------------------------------------------------------
+      - name: Find failed run ID
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Use the HEAD SHA of the backport branch to find the CI run.
+          # The backport.yml creates a branch and the CI workflow triggers on
+          # pull_request events for that branch — gh run list -c <sha> finds it
+          # exactly without any title-matching heuristics.
+          HEAD_SHA=$(gh api "repos/$REPO/git/refs/heads/$BACKPORT_BRANCH" \
+            --jq '.object.sha')
+
+          RUN_ID=$(gh run list \
+            --repo "$REPO" \
+            --status failure \
+            --commit "$HEAD_SHA" \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "::error::No failed CI run found for $BACKPORT_BRANCH (SHA $HEAD_SHA)"
+            exit 1
+          fi
+
+          echo "RUN_ID=$RUN_ID"       >> "$GITHUB_ENV"
+          echo "HEAD_SHA=$HEAD_SHA"   >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------------
+      # Step 3 — Fetch targeted failure logs (per-job, per-step, deduped)
+      # -----------------------------------------------------------------------
+      - name: Fetch failed step logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Fetch the full jobs list for this run (handles pagination up to 100)
+          gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+            > "$RUNNER_TEMP/jobs.json"
+
+          python3 - "$RUNNER_TEMP/jobs.json" "$RUNNER_TEMP/failure_logs.txt" \
+                    "$REPO" <<'PYEOF'
+          import sys, json, re, subprocess, os
+
+          jobs_path, out_path, repo = sys.argv[1], sys.argv[2], sys.argv[3]
+
+          with open(jobs_path) as f:
+              jobs = json.load(f)["jobs"]
+
+          # ── 1. Deduplicate by name, keeping the most recent startedAt ────────
+          latest: dict = {}
+          for job in jobs:
+              name = job["name"]
+              if name not in latest or job["startedAt"] > latest[name]["startedAt"]:
+                  latest[name] = job
+
+          # ── 2. Skip pure-aggregator jobs (summary jobs that only mirror other
+          #       jobs' outcomes — they carry no actionable log content).
+          AGGREGATOR_STEPS = {"All required jobs passed",
+                              "Some required job failed or was skipped",
+                              "All matrix shards passed",
+                              "Some matrix shard failed or was skipped"}
+
+          STEP_LOG_LIMIT = 8_000   # chars per failed step log
+          NON_SUCCESS    = {"failure", "skipped", "cancelled"}
+
+          result: dict = {}
+
+          for job in latest.values():
+              steps = job.get("steps", [])
+
+              # Skip if all non-success steps are aggregator sentinels
+              non_ok = [s for s in steps if s.get("conclusion") in NON_SUCCESS
+                        and s["name"] not in AGGREGATOR_STEPS]
+              if not non_ok and job.get("conclusion") != "failure":
+                  continue  # job fully succeeded
+
+              job_id   = job["id"]
+              job_name = job["name"]
+
+              # ── 3. Fetch this job's full log once ────────────────────────────
+              raw_log = ""
+              try:
+                  proc = subprocess.run(
+                      ["gh", "api", f"repos/{repo}/actions/jobs/{job_id}/logs"],
+                      capture_output=True, text=True, errors="replace"
+                  )
+                  raw_log = proc.stdout
+              except Exception as e:
+                  raw_log = f"[log fetch error: {e}]"
+
+              # ── 4. Slice log into per-step blocks via ##[group] markers ──────
+              # Format: "timestamp ##[group]Step Name\n...lines...\n##[endgroup]"
+              step_blocks: dict[str, str] = {}
+              pattern = re.compile(
+                  r"\d{4}-\d{2}-\d{2}T[\d:.Z]+ ##\[group\](.+?)\n(.*?)(?=\d{4}-\d{2}-\d{2}T[\d:.Z]+ ##\[group\]|\Z)",
+                  re.DOTALL
+              )
+              for m in pattern.finditer(raw_log):
+                  step_blocks[m.group(1).strip()] = m.group(2)
+
+              # ── 5. Build structured output for this job ──────────────────────
+              job_entry: dict = {}
+              for step in steps:
+                  sname      = step["name"]
+                  conclusion = step.get("conclusion", "unknown")
+
+                  if sname in AGGREGATOR_STEPS:
+                      continue  # skip aggregator sentinel steps entirely
+
+                  entry: dict = {"conclusion": conclusion}
+
+                  if conclusion not in NON_SUCCESS:
+                      entry["log"] = "lgtm"
+                  else:
+                      raw_block = step_blocks.get(sname, "")
+                      # Strip timestamps from each line for readability
+                      clean = re.sub(
+                          r"^\d{4}-\d{2}-\d{2}T[\d:.Z]+ ", "", raw_block,
+                          flags=re.MULTILINE
+                      )
+                      clean = clean.strip()
+                      if len(clean) > STEP_LOG_LIMIT:
+                          clean = clean[:STEP_LOG_LIMIT] + f"\n[...truncated after {STEP_LOG_LIMIT} chars...]"
+                      entry["log"] = clean if clean else "[no log captured]"
+
+                  job_entry[sname] = entry
+
+              if job_entry:
+                  result[job_name] = job_entry
+
+          with open(out_path, "w") as f:
+              json.dump({"jobs": result}, f, indent=2)
+
+          PYEOF
+
+          echo "FAILURE_LOGS_FILE=$RUNNER_TEMP/failure_logs.txt" >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------------
+      # Step 4 — Fetch backport PR diff
+      # -----------------------------------------------------------------------
+      - name: Fetch PR diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh pr diff "$PR_NUMBER" --repo "$REPO" \
+            > "$RUNNER_TEMP/pr_diff.patch"
+          echo "PR_DIFF_FILE=$RUNNER_TEMP/pr_diff.patch" >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------------
+      # Step 5 — Checkout the backport branch
+      # -----------------------------------------------------------------------
+      - name: Checkout backport branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BACKPORT_BRANCH }}
+          fetch-depth: 0
+
+      # -----------------------------------------------------------------------
+      # Step 6 — Setup Node.js
+      # -----------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # -----------------------------------------------------------------------
+      # Step 7 — Restore prompt assembler from the healer workflow's commit
+      # -----------------------------------------------------------------------
+      - name: Restore prompt assembler files
+        run: |
+          # The backport branch doesn't have .github/workflows/actions/bob-backport/
+          # (it was branched before this workflow existed). Fetch the exact commit
+          # that triggered this issue_comment event — which is always on the default
+          # branch — and restore just that directory from it.
+          git fetch origin "${{ github.sha }}" --depth=1
+          git checkout "${{ github.sha }}" -- .github/workflows/actions/bob-backport
+
+      # -----------------------------------------------------------------------
+      # Step 8 — Install prompt assembler dependencies
+      # -----------------------------------------------------------------------
+      - name: Install prompt assembler dependencies
+        run: cd .github/workflows/actions/bob-backport && npm install
+
+      # -----------------------------------------------------------------------
+      # Step 9 — Install Bob Shell
+      # -----------------------------------------------------------------------
+      - name: Install Bob Shell
+        run: curl -fsSL https://bob.ibm.com/download/bobshell.sh | bash -s -- --pm npm
+
+      # -----------------------------------------------------------------------
+      # Step 10 — Run Bob Shell
+      # -----------------------------------------------------------------------
+      - name: Run Bob Shell
+        env:
+          BOBSHELL_API_KEY: ${{ secrets.BOBSHELL_API_KEY }}
+          FAILURE_LOGS_FILE: ${{ env.FAILURE_LOGS_FILE }}
+          PR_DIFF_FILE: ${{ env.PR_DIFF_FILE }}
+          ORIGINAL_PR_NUMBER: ${{ env.ORIGINAL_PR_NUMBER }}
+          BACKPORT_PR_NUMBER: ${{ github.event.issue.number }}
+          RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          bob --accept-license --auth-method api-key \
+            -p "$(npx tsx .github/workflows/actions/bob-backport/prompt.ts)" \
+            2>&1 | tee "$RUNNER_TEMP/bob_output.txt"
+
+      # -----------------------------------------------------------------------
+      # Step 10 — Extract analysis from Bob's stdout
+      # -----------------------------------------------------------------------
+      - name: Extract Bob's analysis
+        run: |
+          BOB_OUTPUT="$RUNNER_TEMP/bob_output.txt"
+          ANALYSIS_OUT="$RUNNER_TEMP/analysis.md"
+
+          python3 - "$BOB_OUTPUT" "$ANALYSIS_OUT" <<'EOF'
+          import re, sys
+
+          bob_output_path = sys.argv[1]
+          analysis_out_path = sys.argv[2]
+
+          with open(bob_output_path, "r") as f:
+              raw = f.read()
+
+          HEADER = (
+              "## \U0001f916 Bob's Backport Analysis\n\n"
+              "*Posted by [Bob Shell](https://bob.ibm.com), running headless on GitHub Actions.*\n\n"
+              "---\n\n"
+          )
+
+          match = re.search(
+              r"<<<BOB_ANALYSIS_BEGIN>>>(.*?)<<<BOB_ANALYSIS_END>>>",
+              raw,
+              re.DOTALL,
+          )
+
+          if match:
+              body = HEADER + match.group(1).strip()
+          else:
+              body = (
+                  HEADER
+                  + "\u26a0\ufe0f Bob did not produce structured output. Raw output below:\n\n"
+                  + "```\n"
+                  + raw[:8000]
+                  + ("\n[...truncated...]" if len(raw) > 8000 else "")
+                  + "\n```"
+              )
+
+          with open(analysis_out_path, "w") as f:
+              f.write(body)
+          EOF
+          echo "ANALYSIS_FILE=$ANALYSIS_OUT" >> "$GITHUB_ENV"
+
+      # -----------------------------------------------------------------------
+      # Step 11 — Post the comment on the backport PR
+      # -----------------------------------------------------------------------
+      - name: Post analysis comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body-file "$RUNNER_TEMP/analysis.md"
+
+      # -----------------------------------------------------------------------
+      # Step 12 — Post failure notice if any earlier step failed
+      # -----------------------------------------------------------------------
+      - name: Post failure notice
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "$PR_NUMBER" \
+            --repo "$REPO" \
+            --body "⚠️ **Bob encountered an issue** and could not complete the analysis. [View the workflow run]($WORKFLOW_RUN_URL) for details."
