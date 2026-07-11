@@ -67,11 +67,13 @@ Step 3 instructs you to.
 
 ## Step 1 — Read the failure logs
 
-Study the failure logs below to identify the failing step name and the exact
-error message.
+The structure below is a JSON object indexed by CI job name. Each job contains
+its steps; every step has a \`conclusion\` and a \`log\` field. Steps that passed
+have \`"log": "lgtm"\`. Steps that failed or were skipped have their actual log
+content in \`log\`. Focus on steps with \`"conclusion": "failure"\`.
 
 ## Failure logs
-\`\`\`
+\`\`\`json
 ${failureLogs}
 \`\`\`
 
